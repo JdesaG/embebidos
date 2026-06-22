@@ -1,0 +1,1 @@
+session_id,sample_index,received_at,elapsed_s,label,event_label,person_position,environment,notes,raw_line,type,id,mac,rssi,rate,noise_floor,fft_gain,agc_gain,channel,timestamp,sig_len,rx_state,len,first_word,data,sig_mode,mcs,bandwidth,smoothing,not_sounding,aggregation,stbc,fec_coding,sgi,ampdu_cnt,secondary_channel,ant,parse_error

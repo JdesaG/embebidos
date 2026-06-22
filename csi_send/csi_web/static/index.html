@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ESP CSI Dashboard</title>
+    <link rel="stylesheet" href="/style.css">
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <h1>ESP CSI Dashboard</h1>
+          <p id="subtitle">Esperando datos CSI</p>
+        </div>
+        <div class="status" id="status">
+          <span class="dot"></span>
+          <span id="statusText">Desconectado</span>
+        </div>
+      </header>
+
+      <section class="metrics" aria-label="Métricas">
+        <article class="metric">
+          <span>Paquetes</span>
+          <strong id="packetCount">0</strong>
+        </article>
+        <article class="metric">
+          <span>RSSI</span>
+          <strong id="rssi">-- dBm</strong>
+        </article>
+        <article class="metric">
+          <span>SNR</span>
+          <strong id="snr">-- dB</strong>
+        </article>
+        <article class="metric">
+          <span>Canal</span>
+          <strong id="channel">--</strong>
+        </article>
+        <article class="metric">
+          <span>Subportadoras</span>
+          <strong id="subcarriers">--</strong>
+        </article>
+        <article class="metric">
+          <span>Actividad</span>
+          <strong id="activityValue">--</strong>
+        </article>
+      </section>
+
+      <section class="layout">
+        <section class="panel wide">
+          <div class="panel-head">
+            <h2>Recolección de dataset</h2>
+            <span id="collectionStatus">Sin sesión activa</span>
+          </div>
+          <div class="collector">
+            <div class="collector-grid">
+              <label>
+                Duración (s)
+                <input id="durationInput" type="number" min="10" step="5" value="180">
+              </label>
+              <label>
+                Posición persona
+                <input id="personPositionInput" value="between_tx_rx">
+              </label>
+              <label>
+                Entorno
+                <input id="environmentInput" value="off">
+              </label>
+              <label>
+                Notas
+                <input id="notesInput" placeholder="ej. puerta cerrada, laptop encendida">
+              </label>
+            </div>
+            <div class="preset-grid" id="presetButtons"></div>
+            <div class="progress-wrap">
+              <div class="progress-bar">
+                <span id="collectionProgress"></span>
+              </div>
+              <button id="stopCollectionBtn" class="secondary" disabled>Detener</button>
+            </div>
+            <p class="collector-detail" id="collectionDetail">Primero verifica que la web reciba CSI; luego presiona un estado para guardar una sesión cronometrada.</p>
+          </div>
+        </section>
+
+        <section class="panel room-panel">
+          <div class="panel-head">
+            <h2>Mapa</h2>
+            <div class="button-row">
+              <button id="calibrateBtn">Calibrar</button>
+              <button id="pauseBtn" class="secondary">Pausar</button>
+            </div>
+          </div>
+          <canvas id="roomCanvas" width="720" height="520"></canvas>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>CSI amplitud</h2>
+            <span id="ampRange">--</span>
+          </div>
+          <canvas id="amplitudeCanvas" width="840" height="260"></canvas>
+        </section>
+
+        <section class="panel wide">
+          <div class="panel-head">
+            <h2>Heatmap</h2>
+            <span id="heatmapRange">--</span>
+          </div>
+          <canvas id="heatmapCanvas" width="1180" height="360"></canvas>
+        </section>
+
+        <section class="panel wide">
+          <div class="panel-head">
+            <h2>RSSI / SNR</h2>
+            <span id="serialInfo">--</span>
+          </div>
+          <canvas id="rssiCanvas" width="1180" height="220"></canvas>
+        </section>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

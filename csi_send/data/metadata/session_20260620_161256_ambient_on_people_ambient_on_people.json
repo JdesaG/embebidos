@@ -1,0 +1,23 @@
+{
+  "session_id": "session_20260620_161256_ambient_on_people",
+  "label": "ambient_on_people",
+  "duration_s": 141.352,
+  "requested_duration_s": 180.0,
+  "description": "Aire acondicionado/equipos encendidos y gente caminando.",
+  "tx_position": "",
+  "rx_position": "",
+  "distance_cm": "",
+  "height_cm": "",
+  "environment": "ambient_on",
+  "person_position": "people_moving",
+  "notes": "",
+  "events": [],
+  "started_at": "2026-06-20T21:12:56.716+00:00",
+  "ended_at": "2026-06-20T21:15:18.068+00:00",
+  "raw_file": "data/raw/session_20260620_161256_ambient_on_people_ambient_on_people.csv",
+  "metadata_file": "data/metadata/session_20260620_161256_ambient_on_people_ambient_on_people.json",
+  "samples_collected": 79,
+  "corrupt_lines": 0,
+  "sample_rate_estimated_hz": 0.559,
+  "stop_reason": "server_shutdown"
+}

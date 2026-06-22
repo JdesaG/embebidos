@@ -1,0 +1,23 @@
+{
+  "session_id": "session_20260620_142416_empty_off",
+  "label": "empty_off",
+  "duration_s": 180.006,
+  "requested_duration_s": 180.0,
+  "description": "Todo apagado, sin nadie entre ESP32.",
+  "tx_position": "",
+  "rx_position": "",
+  "distance_cm": "",
+  "height_cm": "",
+  "environment": "off",
+  "person_position": "none",
+  "notes": "",
+  "events": [],
+  "started_at": "2026-06-20T19:24:16.850+00:00",
+  "ended_at": "2026-06-20T19:27:16.824+00:00",
+  "raw_file": "data/raw/session_20260620_142416_empty_off_empty_off.csv",
+  "metadata_file": "data/metadata/session_20260620_142416_empty_off_empty_off.json",
+  "samples_collected": 12727,
+  "corrupt_lines": 1,
+  "sample_rate_estimated_hz": 70.703,
+  "stop_reason": "duration_complete"
+}

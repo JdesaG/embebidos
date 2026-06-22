@@ -1,0 +1,23 @@
+{
+  "session_id": "session_20260620_150727_breathing_off",
+  "label": "breathing_off",
+  "duration_s": 180.004,
+  "requested_duration_s": 180.0,
+  "description": "Persona quieta respirando normal en medio de las ESP32.",
+  "tx_position": "",
+  "rx_position": "",
+  "distance_cm": "",
+  "height_cm": "",
+  "environment": "off",
+  "person_position": "between_tx_rx",
+  "notes": "",
+  "events": [],
+  "started_at": "2026-06-20T20:07:27.517+00:00",
+  "ended_at": "2026-06-20T20:12:56.002+00:00",
+  "raw_file": "data/raw/session_20260620_150727_breathing_off_breathing_off.csv",
+  "metadata_file": "data/metadata/session_20260620_150727_breathing_off_breathing_off.json",
+  "samples_collected": 12686,
+  "corrupt_lines": 2,
+  "sample_rate_estimated_hz": 70.476,
+  "stop_reason": "duration_complete"
+}
