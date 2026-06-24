@@ -280,6 +280,193 @@ h2 {
   line-height: 1.45;
 }
 
+.inference-panel {
+  border-color: var(--line);
+}
+
+.inference-panel.breathing {
+  border-color: rgba(114, 214, 107, 0.55);
+}
+
+.inference-panel.apnea {
+  border-color: rgba(255, 107, 95, 0.75);
+}
+
+.inference-panel.warning,
+.inference-panel.warming {
+  border-color: rgba(242, 188, 87, 0.55);
+}
+
+.inference-body {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(260px, 0.8fr) minmax(420px, 1.2fr);
+  padding: 12px;
+}
+
+.inference-status {
+  align-items: center;
+  background: #111111;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  min-height: 94px;
+  padding: 14px;
+}
+
+.inference-dot {
+  background: var(--amber);
+  border-radius: 999px;
+  box-shadow: 0 0 0 7px rgba(242, 188, 87, 0.12);
+  flex: 0 0 auto;
+  height: 16px;
+  width: 16px;
+}
+
+.inference-status.breathing .inference-dot {
+  background: var(--green);
+  box-shadow: 0 0 0 7px rgba(114, 214, 107, 0.12);
+}
+
+.inference-status.apnea .inference-dot {
+  background: var(--red);
+  box-shadow: 0 0 0 7px rgba(255, 107, 95, 0.14);
+}
+
+.inference-status strong {
+  display: block;
+  font-size: 24px;
+  line-height: 1.1;
+}
+
+.inference-status p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+  margin-top: 7px;
+}
+
+.inference-grid {
+  display: grid;
+  gap: 1px;
+  grid-template-columns: repeat(3, minmax(120px, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.inference-grid article {
+  background: var(--surface-2);
+  min-width: 0;
+  padding: 12px;
+}
+
+.inference-grid span {
+  color: var(--muted);
+  display: block;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.inference-grid strong {
+  display: block;
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.sensor-panel.ok {
+  border-color: rgba(114, 214, 107, 0.55);
+}
+
+.sensor-panel.alert {
+  border-color: rgba(255, 107, 95, 0.75);
+}
+
+.sensor-panel.waiting {
+  border-color: rgba(242, 188, 87, 0.55);
+}
+
+.sensor-body {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(260px, 0.75fr) minmax(420px, 1.25fr);
+  padding: 12px;
+}
+
+.sensor-status {
+  align-items: center;
+  background: #111111;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  min-height: 94px;
+  padding: 14px;
+}
+
+.sensor-dot {
+  background: var(--amber);
+  border-radius: 999px;
+  box-shadow: 0 0 0 7px rgba(242, 188, 87, 0.12);
+  flex: 0 0 auto;
+  height: 16px;
+  width: 16px;
+}
+
+.sensor-status.ok .sensor-dot {
+  background: var(--green);
+  box-shadow: 0 0 0 7px rgba(114, 214, 107, 0.12);
+}
+
+.sensor-status.alert .sensor-dot {
+  background: var(--red);
+  box-shadow: 0 0 0 7px rgba(255, 107, 95, 0.14);
+}
+
+.sensor-status strong {
+  display: block;
+  font-size: 23px;
+  line-height: 1.1;
+}
+
+.sensor-status p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+  margin-top: 7px;
+}
+
+.sensor-grid {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 1px;
+  grid-template-columns: repeat(3, minmax(120px, 1fr));
+  overflow: hidden;
+}
+
+.sensor-grid article {
+  background: var(--surface-2);
+  min-width: 0;
+  padding: 12px;
+}
+
+.sensor-grid span {
+  color: var(--muted);
+  display: block;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.sensor-grid strong {
+  display: block;
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
 canvas {
   display: block;
   height: auto;
@@ -299,6 +486,8 @@ canvas {
 
   .metrics,
   .layout,
+  .inference-body,
+  .sensor-body,
   .collector-grid,
   .preset-grid {
     grid-template-columns: 1fr;
@@ -311,6 +500,14 @@ canvas {
 
 @media (max-width: 640px) {
   .metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .inference-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .sensor-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

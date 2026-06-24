@@ -2,14 +2,20 @@
 import argparse
 import csv
 import json
+import logging
 import math
 import os
 import threading
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
 from datetime import datetime, timezone
+from collections import deque
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from io import StringIO
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 try:
@@ -66,6 +72,21 @@ C5C6_COLUMNS = [
     "len",
     "first_word",
     "data",
+]
+
+SENSOR_COLUMNS = [
+    "type",
+    "seq",
+    "temp_c_x10",
+    "bpm",
+    "sound_detected",
+    "alert_sound",
+    "alert_bpm_high",
+    "alert_temp_high",
+    "alert_temp_low",
+    "buzzer_interval_ms",
+    "buzzer_on",
+    "uptime_ms",
 ]
 
 COLLECTION_PRESETS = {
@@ -153,6 +174,31 @@ RAW_OUTPUT_COLUMNS = [
     "parse_error",
 ]
 
+MODEL_FEATURES = [
+    "psd_resp_band",
+    "psd_total",
+    "snr_resp",
+    "variance_filtered",
+    "zero_crossings",
+    "spectral_entropy",
+    "peak_freq_hz",
+    "peak_power",
+]
+
+DEFAULT_MODEL_PATH = "/Users/jandonyggarofalo/Downloads/Apnea Model.joblib"
+DEFAULT_TELEGRAM_ALERT_MESSAGE = "\U0001f6a8 \u26a0\ufe0f ALERTA DE AHOGO: posible apnea detectada."
+LOCAL_ENV_FILENAME = ".env.local"
+DEFAULT_LOG_DIRNAME = "logs"
+LOG_CATEGORIES = {
+    "startup": "Arranque y configuracion del servidor.",
+    "serial": "Conexion, desconexion o lectura del puerto serial.",
+    "parse": "Lineas CSI recibidas con formato invalido.",
+    "collection": "Inicio, escritura o cierre de sesiones CSV.",
+    "ml": "Carga del modelo, preprocesamiento e inferencia.",
+    "telegram": "Envio de alertas por Telegram.",
+    "http": "Errores de endpoints de la web.",
+}
+
 
 def iso_now():
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds")
@@ -175,6 +221,125 @@ def ensure_data_dirs(base_dir):
     return paths
 
 
+def truncate_text(value, max_len=500):
+    text = str(value)
+    if len(text) <= max_len:
+        return text
+    return text[: max_len - 3] + "..."
+
+
+class LogService:
+    def __init__(self, log_dir):
+        self.log_dir = Path(log_dir).expanduser()
+        self.log_dir.mkdir(parents=True, exist_ok=True)
+        self.app_log_path = self.log_dir / "app.log"
+        self.error_log_path = self.log_dir / "errors.jsonl"
+        self.lock = threading.Lock()
+        self.counts = {category: 0 for category in LOG_CATEGORIES}
+        self.recent = deque(maxlen=30)
+        self.logger = logging.getLogger(f"csi_web.{id(self)}")
+        self.logger.setLevel(logging.INFO)
+        self.logger.propagate = False
+
+        handler = RotatingFileHandler(
+            self.app_log_path,
+            maxBytes=1_000_000,
+            backupCount=5,
+            encoding="utf-8",
+        )
+        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [%(name)s] %(message)s"))
+        self.logger.handlers.clear()
+        self.logger.addHandler(handler)
+
+    def info(self, category, message, context=None):
+        self.event(category, message, level="INFO", context=context)
+
+    def warning(self, category, message, context=None):
+        self.event(category, message, level="WARNING", context=context)
+
+    def error(self, category, message, context=None, exc=None):
+        self.event(category, message, level="ERROR", context=context, exc=exc)
+
+    def event(self, category, message, level="ERROR", context=None, exc=None):
+        category = category if category in LOG_CATEGORIES else "startup"
+        record = {
+            "time": iso_now(),
+            "level": level,
+            "category": category,
+            "message": truncate_text(message, 1000),
+            "context": context or {},
+        }
+        if exc is not None:
+            record["exception_type"] = exc.__class__.__name__
+            record["exception"] = truncate_text(str(exc), 1000)
+
+        line = json.dumps(record, ensure_ascii=False, separators=(",", ":"))
+        with self.lock:
+            with open(self.error_log_path, "a", encoding="utf-8") as error_fd:
+                error_fd.write(line + "\n")
+            self.counts[category] = self.counts.get(category, 0) + 1
+            self.recent.append(record)
+
+        log_level = getattr(logging, level.upper(), logging.ERROR)
+        self.logger.log(log_level, "%s | %s | %s", category, record["message"], record["context"])
+
+    def snapshot(self):
+        with self.lock:
+            return {
+                "log_dir": str(self.log_dir),
+                "app_log": str(self.app_log_path),
+                "error_log": str(self.error_log_path),
+                "categories": LOG_CATEGORIES,
+                "counts": dict(self.counts),
+                "recent": list(self.recent),
+            }
+
+
+class NullLogService:
+    def info(self, *args, **kwargs):
+        return None
+
+    def warning(self, *args, **kwargs):
+        return None
+
+    def error(self, *args, **kwargs):
+        return None
+
+    def snapshot(self):
+        return {
+            "log_dir": "",
+            "app_log": "",
+            "error_log": "",
+            "categories": LOG_CATEGORIES,
+            "counts": {},
+            "recent": [],
+        }
+
+
+def load_env_file(path):
+    path = Path(path)
+    if not path.exists():
+        return False
+
+    with open(path, "r", encoding="utf-8") as env_fd:
+        for line in env_fd:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip()
+            if not key or key in os.environ:
+                continue
+
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+                value = value[1:-1]
+            os.environ[key] = value
+
+    return True
+
+
 def event_label_at(elapsed_s, label, events):
     for event in events:
         if event["start_s"] <= elapsed_s < event["end_s"]:
@@ -182,9 +347,480 @@ def event_label_at(elapsed_s, label, events):
     return label
 
 
+class RealtimeApneaInference:
+    def __init__(
+        self,
+        model_path,
+        window_s=20.0,
+        step_s=5.0,
+        target_hz=50.0,
+        respiratory_low_hz=0.1,
+        respiratory_high_hz=0.5,
+        min_pc1_var=0.30,
+        log_service=None,
+    ):
+        self.logs = log_service or NullLogService()
+        self.model_path = str(model_path) if model_path else ""
+        self.window_s = float(window_s)
+        self.step_s = float(step_s)
+        self.target_hz = float(target_hz)
+        self.respiratory_low_hz = float(respiratory_low_hz)
+        self.respiratory_high_hz = float(respiratory_high_hz)
+        self.min_pc1_var = float(min_pc1_var)
+        self.buffer = deque()
+        self.lock = threading.Lock()
+        self.last_eval_monotonic = 0.0
+        self.apnea_started_monotonic = None
+        self.np = None
+        self.butter = None
+        self.filtfilt = None
+        self.welch = None
+        self.model = None
+        self.scaler = None
+        self.features = list(MODEL_FEATURES)
+        self.status = {
+            "enabled": False,
+            "ready": False,
+            "state": "model_unavailable",
+            "label": "Modelo no disponible",
+            "detail": "El modelo ML no se ha cargado.",
+            "model_path": self.model_path,
+            "mode": "sliding_window_features",
+            "window_s": self.window_s,
+            "step_s": self.step_s,
+            "latency_min_s": round(self.window_s / 2.0, 1),
+            "latency_max_s": round(self.window_s + self.step_s, 1),
+            "last_inference_at": None,
+            "progress": 0,
+            "samples_in_window": 0,
+            "active_subcarriers": 0,
+            "rpm_estimate": None,
+            "apnea_probability": None,
+            "confidence": None,
+            "apnea_duration_s": 0,
+            "pc1_var_explained": None,
+            "features": {},
+            "last_error": "",
+        }
+        self._load_model()
+
+    def _load_model(self):
+        if not self.model_path:
+            self.status["detail"] = "Ejecuta server.py con --model-path para habilitar inferencia."
+            self.logs.warning("ml", self.status["detail"])
+            return
+
+        if not os.path.exists(self.model_path):
+            self.status["detail"] = f"No existe el archivo del modelo: {self.model_path}"
+            self.logs.error("ml", self.status["detail"], context={"model_path": self.model_path})
+            return
+
+        try:
+            import joblib
+            import numpy as np
+            from scipy.signal import butter, filtfilt, welch
+        except Exception as exc:
+            self.status["detail"] = (
+                "Faltan dependencias ML. Instala numpy scipy scikit-learn joblib "
+                f"en el Python que corre esta web. Detalle: {exc}"
+            )
+            self.status["last_error"] = str(exc)
+            self.logs.error("ml", self.status["detail"], exc=exc)
+            return
+
+        try:
+            loaded = joblib.load(self.model_path)
+        except Exception as exc:
+            self.status["detail"] = f"No se pudo cargar el modelo: {exc}"
+            self.status["last_error"] = str(exc)
+            self.logs.error("ml", self.status["detail"], context={"model_path": self.model_path}, exc=exc)
+            return
+
+        if isinstance(loaded, dict):
+            self.model = loaded.get("model") or loaded.get("clf") or loaded.get("classifier")
+            self.scaler = loaded.get("scaler")
+            self.features = list(loaded.get("features") or loaded.get("feature_names") or MODEL_FEATURES)
+        else:
+            self.model = loaded
+
+        if self.model is None:
+            self.status["detail"] = "El joblib no contiene una clave de modelo reconocible."
+            self.logs.error("ml", self.status["detail"], context={"model_path": self.model_path})
+            return
+
+        self.np = np
+        self.butter = butter
+        self.filtfilt = filtfilt
+        self.welch = welch
+        self.status.update(
+            {
+                "enabled": True,
+                "ready": False,
+                "state": "warming",
+                "label": "Calentando ventana",
+                "detail": f"Modelo cargado. Esperando {int(self.window_s)} s de CSI.",
+                "last_error": "",
+            }
+        )
+        self.logs.info(
+            "ml",
+            "Modelo cargado correctamente.",
+            context={"model_path": self.model_path, "features": self.features},
+        )
+
+    def snapshot(self):
+        with self.lock:
+            status = dict(self.status)
+            status["features"] = dict(self.status.get("features") or {})
+            return status
+
+    def add_sample(self, payload):
+        now = time.monotonic()
+        with self.lock:
+            if not self.status.get("enabled"):
+                return
+
+            amplitude = payload.get("amplitude") or []
+            if not amplitude:
+                return
+
+            try:
+                amp = self.np.asarray(amplitude, dtype=self.np.float32)
+            except Exception as exc:
+                self._set_error_locked(f"Amplitud invalida: {exc}")
+                return
+
+            self.buffer.append((now, amp))
+            cutoff = now - max(self.window_s * 1.5, self.window_s + self.step_s)
+            while self.buffer and self.buffer[0][0] < cutoff:
+                self.buffer.popleft()
+
+            duration = self.buffer[-1][0] - self.buffer[0][0] if len(self.buffer) > 1 else 0
+            progress = min(1.0, duration / self.window_s) if self.window_s else 0
+            self.status["progress"] = round(progress, 3)
+            self.status["samples_in_window"] = sum(1 for ts, _ in self.buffer if ts >= now - self.window_s)
+
+            if duration < self.window_s:
+                self.status.update(
+                    {
+                        "ready": False,
+                        "state": "warming",
+                        "label": "Calentando ventana",
+                        "detail": f"Recolectando ventana ML: {duration:.1f}/{self.window_s:.0f} s.",
+                    }
+                )
+                return
+
+            if now - self.last_eval_monotonic < self.step_s:
+                return
+
+            self.last_eval_monotonic = now
+            try:
+                result = self._evaluate_locked(now)
+                self.status.update(result)
+            except Exception as exc:
+                self._set_error_locked(str(exc))
+
+    def _set_error_locked(self, message):
+        self.logs.error("ml", message)
+        self.status.update(
+            {
+                "ready": False,
+                "state": "error",
+                "label": "Error ML",
+                "detail": message,
+                "last_error": message,
+            }
+        )
+
+    def _evaluate_locked(self, now):
+        np = self.np
+        samples = [(ts, amp) for ts, amp in self.buffer if ts >= now - self.window_s]
+        if len(samples) < max(10, int(self.window_s * 8)):
+            return {
+                "ready": False,
+                "state": "signal_bad",
+                "label": "Señal insuficiente",
+                "detail": "No hay suficientes paquetes CSI en la ventana.",
+            }
+
+        min_len = min(len(amp) for _, amp in samples)
+        if min_len < 16:
+            return {
+                "ready": False,
+                "state": "signal_bad",
+                "label": "CSI insuficiente",
+                "detail": "La trama CSI tiene muy pocas subportadoras.",
+            }
+
+        times = np.asarray([ts for ts, _ in samples], dtype=np.float64)
+        matrix = np.stack([amp[:min_len] for _, amp in samples], axis=0)
+        start_time = now - self.window_s
+        rel_times = times - start_time
+
+        target_count = int(round(self.window_s * self.target_hz))
+        target_times = np.linspace(0.0, self.window_s, target_count, endpoint=False)
+
+        active_mask = matrix.mean(axis=0) > 0.5
+        active_count = int(active_mask.sum())
+        if active_count < 8:
+            return {
+                "ready": False,
+                "state": "signal_bad",
+                "label": "Sin señal útil",
+                "detail": "No hay suficientes subportadoras activas.",
+                "active_subcarriers": active_count,
+            }
+
+        matrix = matrix[:, active_mask]
+        uniform = np.empty((target_count, matrix.shape[1]), dtype=np.float32)
+        for carrier in range(matrix.shape[1]):
+            uniform[:, carrier] = np.interp(target_times, rel_times, matrix[:, carrier])
+
+        detrended = np.empty_like(uniform)
+        rolling_n = int(round(3.0 * self.target_hz))
+        if rolling_n % 2 == 0:
+            rolling_n += 1
+        kernel = np.ones(rolling_n, dtype=np.float32) / rolling_n
+        for carrier in range(uniform.shape[1]):
+            padded = np.pad(uniform[:, carrier], rolling_n // 2, mode="edge")
+            trend = np.convolve(padded, kernel, mode="valid")
+            detrended[:, carrier] = uniform[:, carrier] - trend
+
+        centered = detrended - detrended.mean(axis=0)
+        u, s, _ = np.linalg.svd(centered, full_matrices=False)
+        if not len(s) or float((s * s).sum()) <= 1e-12:
+            return {
+                "ready": False,
+                "state": "signal_bad",
+                "label": "Sin variación",
+                "detail": "La ventana CSI no tiene variación útil.",
+                "active_subcarriers": active_count,
+            }
+
+        pc1 = u[:, 0] * s[0]
+        pc1_var = float(s[0] ** 2 / (s * s).sum())
+        if pc1_var < self.min_pc1_var:
+            return {
+                "ready": False,
+                "state": "signal_bad",
+                "label": "Señal débil",
+                "detail": f"PC1 explica solo {pc1_var:.2f} de la variación.",
+                "active_subcarriers": active_count,
+                "pc1_var_explained": round(pc1_var, 4),
+            }
+
+        nyq = self.target_hz / 2.0
+        b, a = self.butter(
+            4,
+            [self.respiratory_low_hz / nyq, self.respiratory_high_hz / nyq],
+            btype="band",
+        )
+        resp = self.filtfilt(b, a, pc1)
+        features = self._extract_features(resp)
+        row = [[float(features[name]) for name in self.features]]
+        if self.scaler is not None:
+            row = self.scaler.transform(row)
+
+        prediction = int(self.model.predict(row)[0])
+        apnea_probability = None
+        confidence = None
+        if hasattr(self.model, "predict_proba"):
+            proba = self.model.predict_proba(row)[0]
+            classes = list(getattr(self.model, "classes_", [0, 1]))
+            if 1 in classes:
+                apnea_probability = float(proba[classes.index(1)])
+            else:
+                apnea_probability = float(proba[-1])
+            confidence = float(max(proba))
+        elif hasattr(self.model, "decision_function"):
+            score = float(self.model.decision_function(row)[0])
+            apnea_probability = float(1.0 / (1.0 + math.exp(-score)))
+            confidence = max(apnea_probability, 1.0 - apnea_probability)
+
+        state = "apnea" if prediction == 1 else "breathing"
+        if state == "apnea":
+            if self.apnea_started_monotonic is None:
+                self.apnea_started_monotonic = now
+            apnea_duration = now - self.apnea_started_monotonic
+        else:
+            self.apnea_started_monotonic = None
+            apnea_duration = 0.0
+
+        label = "Posible apnea" if state == "apnea" else "Respirando"
+        detail = (
+            f"Ventana {self.window_s:.0f}s | "
+            f"RPM {features['rpm_estimate']:.1f} | "
+            f"PC1 {pc1_var:.2f}"
+        )
+
+        return {
+            "ready": True,
+            "state": state,
+            "label": label,
+            "detail": detail,
+            "last_inference_at": iso_now(),
+            "progress": 1,
+            "samples_in_window": len(samples),
+            "active_subcarriers": active_count,
+            "rpm_estimate": round(float(features["rpm_estimate"]), 2),
+            "apnea_probability": round(apnea_probability, 4) if apnea_probability is not None else None,
+            "confidence": round(confidence, 4) if confidence is not None else None,
+            "apnea_duration_s": round(apnea_duration, 1),
+            "pc1_var_explained": round(pc1_var, 4),
+            "features": {key: round(float(value), 6) for key, value in features.items()},
+            "last_error": "",
+        }
+
+    def _extract_features(self, resp):
+        np = self.np
+        f, pxx = self.welch(resp, fs=self.target_hz, nperseg=min(len(resp), int(round(self.window_s * self.target_hz))))
+        band = (f >= self.respiratory_low_hz) & (f <= self.respiratory_high_hz)
+        psd_resp = float(pxx[band].mean()) if bool(band.any()) else 0.0
+        psd_total = float(pxx.mean())
+        snr_resp = psd_resp / (psd_total + 1e-12)
+        variance_filtered = float(resp.var())
+        zero_crossings = int((np.diff(np.sign(resp)) != 0).sum())
+        normalized = pxx / (pxx.sum() + 1e-12)
+        spectral_entropy = float(-np.sum(normalized * np.log(normalized + 1e-12)))
+
+        if bool(band.any()) and float(pxx[band].max()) > 0:
+            band_freqs = f[band]
+            band_power = pxx[band]
+            peak_index = int(np.argmax(band_power))
+            peak_freq = float(band_freqs[peak_index])
+            peak_power = float(band_power[peak_index])
+        else:
+            peak_freq = 0.0
+            peak_power = 0.0
+
+        return {
+            "psd_resp_band": psd_resp,
+            "psd_total": psd_total,
+            "snr_resp": snr_resp,
+            "variance_filtered": variance_filtered,
+            "zero_crossings": zero_crossings,
+            "spectral_entropy": spectral_entropy,
+            "peak_freq_hz": peak_freq,
+            "peak_power": peak_power,
+            "rpm_estimate": peak_freq * 60.0,
+        }
+
+
+class TelegramNotifier:
+    def __init__(
+        self,
+        bot_token="",
+        chat_id="",
+        interval_s=1.0,
+        message=DEFAULT_TELEGRAM_ALERT_MESSAGE,
+        log_service=None,
+    ):
+        self.logs = log_service or NullLogService()
+        self.bot_token = str(bot_token or "").strip()
+        self.chat_id = str(chat_id or "").strip()
+        self.interval_s = max(0.5, float(interval_s or 1.0))
+        self.message = str(message or DEFAULT_TELEGRAM_ALERT_MESSAGE)
+        self.enabled = bool(self.bot_token and self.chat_id)
+        self.lock = threading.Lock()
+        self.in_flight = False
+        self.last_sent_monotonic = 0.0
+        self.last_sent_at = None
+        self.sent_count = 0
+        self.last_error = ""
+        self.last_state = "unknown"
+
+    def update(self, inference):
+        if not self.enabled:
+            return
+
+        state = str((inference or {}).get("state") or "unknown")
+        now = time.monotonic()
+        with self.lock:
+            self.last_state = state
+            if state != "apnea":
+                self.last_sent_monotonic = 0.0
+                return
+
+            if self.in_flight or now - self.last_sent_monotonic < self.interval_s:
+                return
+
+            self.in_flight = True
+            self.last_sent_monotonic = now
+
+        thread = threading.Thread(target=self._send_message, daemon=True)
+        thread.start()
+
+    def _send_message(self):
+        url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
+        body = urllib.parse.urlencode(
+            {
+                "chat_id": self.chat_id,
+                "text": self.message,
+                "disable_web_page_preview": "true",
+            }
+        ).encode("utf-8")
+        request = urllib.request.Request(
+            url,
+            data=body,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            method="POST",
+        )
+
+        try:
+            with urllib.request.urlopen(request, timeout=5) as response:
+                if response.status >= 400:
+                    raise RuntimeError(f"Telegram HTTP {response.status}")
+        except urllib.error.HTTPError as exc:
+            try:
+                response_body = exc.read().decode("utf-8", errors="replace")
+            except Exception:
+                response_body = ""
+            with self.lock:
+                self.last_error = str(exc)
+                self.in_flight = False
+            self.logs.error(
+                "telegram",
+                "No se pudo enviar alerta por Telegram.",
+                context={
+                    "status": exc.code,
+                    "response": truncate_text(response_body, 1000),
+                    "chat_id": self.chat_id,
+                },
+                exc=exc,
+            )
+            return
+        except (urllib.error.URLError, RuntimeError) as exc:
+            with self.lock:
+                self.last_error = str(exc)
+                self.in_flight = False
+            self.logs.error("telegram", "No se pudo enviar alerta por Telegram.", exc=exc)
+            return
+
+        with self.lock:
+            self.sent_count += 1
+            self.last_sent_at = iso_now()
+            self.last_error = ""
+            self.in_flight = False
+        self.logs.info("telegram", "Alerta enviada por Telegram.", context={"chat_configured": bool(self.chat_id)})
+
+    def snapshot(self):
+        with self.lock:
+            return {
+                "enabled": self.enabled,
+                "chat_configured": bool(self.chat_id),
+                "interval_s": self.interval_s,
+                "sent_count": self.sent_count,
+                "last_sent_at": self.last_sent_at,
+                "last_error": self.last_error,
+                "last_state": self.last_state,
+            }
+
+
 class CsiRecorder:
-    def __init__(self, base_dir):
+    def __init__(self, base_dir, log_service=None):
         self.base_dir = Path(base_dir)
+        self.logs = log_service or NullLogService()
         self.dirs = ensure_data_dirs(self.base_dir)
         self.lock = threading.Lock()
         self.active = False
@@ -249,6 +885,17 @@ class CsiRecorder:
                 "corrupt_lines": 0,
                 "sample_rate_estimated_hz": 0,
             }
+            self.logs.info(
+                "collection",
+                "Sesion de recoleccion iniciada.",
+                context={
+                    "session_id": session_id,
+                    "label": label,
+                    "duration_s": duration_s,
+                    "raw_file": str(raw_file),
+                    "metadata_file": str(metadata_file),
+                },
+            )
             return self.snapshot_locked()
 
     def stop(self, reason="manual"):
@@ -282,6 +929,17 @@ class CsiRecorder:
         self.writer = None
         self.started_monotonic = None
         self.last_completed = completed
+        self.logs.info(
+            "collection",
+            "Sesion de recoleccion cerrada.",
+            context={
+                "session_id": completed.get("session_id"),
+                "label": completed.get("label"),
+                "reason": reason,
+                "samples_collected": completed.get("samples_collected"),
+                "raw_file": completed.get("raw_file"),
+            },
+        )
         return completed
 
     def record_sample(self, raw_line, record):
@@ -388,19 +1046,26 @@ class CsiRecorder:
 
 
 class CsiState:
-    def __init__(self, base_dir):
+    def __init__(self, base_dir, inference, notifier, log_service=None):
         self.condition = threading.Condition()
-        self.recorder = CsiRecorder(base_dir)
+        self.logs = log_service or NullLogService()
+        self.recorder = CsiRecorder(base_dir, self.logs)
+        self.inference = inference
+        self.notifier = notifier
         self.latest = None
+        self.latest_sensor = None
         self.seq = 0
         self.connected = False
         self.port = ""
         self.baud = 0
         self.packet_count = 0
+        self.sensor_packet_count = 0
         self.parse_errors = 0
         self.serial_errors = []
         self.last_error = ""
         self.last_raw = ""
+        self.last_logged_serial_error = ""
+        self.last_serial_log_monotonic = 0.0
 
     def set_serial_config(self, port, baud):
         with self.condition:
@@ -409,20 +1074,45 @@ class CsiState:
             self.condition.notify_all()
 
     def set_connected(self, connected, error=""):
+        log_event = None
         with self.condition:
+            was_connected = self.connected
             self.connected = connected
             self.last_error = error
             if error:
                 self.serial_errors.append({"time": time.time(), "error": error})
                 self.serial_errors = self.serial_errors[-20:]
+                now = time.monotonic()
+                if error != self.last_logged_serial_error or now - self.last_serial_log_monotonic >= 10:
+                    self.last_logged_serial_error = error
+                    self.last_serial_log_monotonic = now
+                    log_event = ("error", "serial", "Error de conexion serial.", {"port": self.port, "baud": self.baud}, error)
+            elif connected and not was_connected:
+                log_event = ("info", "serial", "Puerto serial conectado.", {"port": self.port, "baud": self.baud}, None)
             self.condition.notify_all()
+        if log_event:
+            level, category, message, context, detail = log_event
+            if level == "error":
+                self.logs.error(category, message, context={**context, "error": detail})
+            else:
+                self.logs.info(category, message, context=context)
 
     def publish(self, payload, raw):
+        self.inference.add_sample(payload)
+        self.notifier.update(self.inference.snapshot())
         with self.condition:
             self.latest = payload
             self.last_raw = raw
             self.seq += 1
             self.packet_count += 1
+            self.condition.notify_all()
+
+    def publish_sensor(self, payload, raw):
+        with self.condition:
+            self.latest_sensor = payload
+            self.last_raw = raw
+            self.seq += 1
+            self.sensor_packet_count += 1
             self.condition.notify_all()
 
     def add_parse_error(self, raw, error):
@@ -431,6 +1121,11 @@ class CsiState:
             self.last_raw = raw
             self.last_error = error
             self.condition.notify_all()
+        self.logs.warning(
+            "parse",
+            "Linea CSI no pudo ser interpretada.",
+            context={"error": error, "raw": truncate_text(raw, 300)},
+        )
 
     def snapshot(self):
         with self.condition:
@@ -439,12 +1134,17 @@ class CsiState:
                 "port": self.port,
                 "baud": self.baud,
                 "packet_count": self.packet_count,
+                "sensor_packet_count": self.sensor_packet_count,
                 "parse_errors": self.parse_errors,
                 "last_error": self.last_error,
                 "last_raw": self.last_raw[-500:],
                 "latest": self.latest,
+                "latest_sensor": self.latest_sensor,
             }
         snapshot["collection"] = self.recorder.snapshot()
+        snapshot["inference"] = self.inference.snapshot()
+        snapshot["notifications"] = self.notifier.snapshot()
+        snapshot["logs"] = self.logs.snapshot()
         return snapshot
 
 
@@ -481,6 +1181,13 @@ def parse_csi_record(line):
         raw = raw[:-1]
 
     return record, format_name, raw
+
+
+def env_float(name, default):
+    try:
+        return float(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        return default
 
 
 def build_payload(record, format_name, raw):
@@ -525,8 +1232,46 @@ def parse_csi_line(line):
     return build_payload(record, format_name, raw)
 
 
+def parse_bool_int(record, key):
+    return bool(to_int(record.get(key), 0))
+
+
+def parse_sensor_line(line):
+    start = line.find("SENSOR_DATA")
+    if start < 0:
+        return None
+
+    row = next(csv.reader(StringIO(line[start:])))
+    if len(row) != len(SENSOR_COLUMNS):
+        raise ValueError(f"unexpected SENSOR_DATA column count: {len(row)}")
+
+    record = dict(zip(SENSOR_COLUMNS, row))
+    temp_c_x10 = to_int(record.get("temp_c_x10"))
+    alerts = {
+        "sound": parse_bool_int(record, "alert_sound"),
+        "bpm_high": parse_bool_int(record, "alert_bpm_high"),
+        "temp_high": parse_bool_int(record, "alert_temp_high"),
+        "temp_low": parse_bool_int(record, "alert_temp_low"),
+    }
+
+    return {
+        "seq": to_int(record.get("seq")),
+        "temperature_c": round(temp_c_x10 / 10.0, 1),
+        "temperature_c_x10": temp_c_x10,
+        "bpm": to_int(record.get("bpm")),
+        "sound_detected": parse_bool_int(record, "sound_detected"),
+        "alerts": alerts,
+        "has_alert": any(alerts.values()),
+        "buzzer_interval_ms": to_int(record.get("buzzer_interval_ms")),
+        "buzzer_on": parse_bool_int(record, "buzzer_on"),
+        "uptime_ms": to_int(record.get("uptime_ms")),
+        "time": time.time(),
+    }
+
+
 def serial_reader(state, serial_port, baud):
     state.set_serial_config(serial_port, baud)
+    state.logs.info("serial", "Lector serial iniciado.", context={"port": serial_port, "baud": baud})
 
     while True:
         try:
@@ -539,6 +1284,15 @@ def serial_reader(state, serial_port, baud):
 
                     line = raw_bytes.decode("utf-8", errors="replace").strip()
                     if not line:
+                        continue
+
+                    try:
+                        sensor_payload = parse_sensor_line(line)
+                        if sensor_payload is not None:
+                            state.publish_sensor(sensor_payload, line)
+                            continue
+                    except Exception as exc:
+                        state.add_parse_error(line, str(exc))
                         continue
 
                     try:
@@ -576,6 +1330,10 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             self.send_json(self.state.snapshot())
             return
 
+        if self.path == "/api/logs/status":
+            self.send_json({"logs": self.state.logs.snapshot()})
+            return
+
         if self.path == "/api/collection/presets":
             self.send_json({"presets": COLLECTION_PRESETS})
             return
@@ -589,8 +1347,10 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         if self.path == "/api/reset":
             with self.state.condition:
                 self.state.packet_count = 0
+                self.state.sensor_packet_count = 0
                 self.state.parse_errors = 0
                 self.state.latest = None
+                self.state.latest_sensor = None
                 self.state.seq += 1
                 self.state.condition.notify_all()
             self.send_json({"ok": True})
@@ -605,6 +1365,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     self.state.condition.notify_all()
                 self.send_json({"ok": True, "collection": collection})
             except Exception as exc:
+                self.state.logs.error("http", "No se pudo iniciar la recoleccion.", exc=exc)
                 self.send_json({"ok": False, "error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
             return
 
@@ -666,17 +1427,58 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
 
 def main():
+    root = os.path.dirname(os.path.abspath(__file__))
+    loaded_env = load_env_file(Path(root) / LOCAL_ENV_FILENAME)
+
     parser = argparse.ArgumentParser(description="Local ESP CSI web dashboard")
     parser.add_argument("--serial-port", default="/dev/cu.usbserial-0001")
     parser.add_argument("--baud", type=int, default=921600)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--http-port", type=int, default=8080)
+    parser.add_argument("--model-path", default=DEFAULT_MODEL_PATH)
+    parser.add_argument("--log-dir", default=os.environ.get("CSI_WEB_LOG_DIR", str(Path(root) / DEFAULT_LOG_DIRNAME)))
+    parser.add_argument("--inference-window-s", type=float, default=20.0)
+    parser.add_argument("--inference-step-s", type=float, default=5.0)
+    parser.add_argument("--inference-target-hz", type=float, default=50.0)
+    parser.add_argument("--telegram-bot-token", default=os.environ.get("TELEGRAM_BOT_TOKEN", ""))
+    parser.add_argument("--telegram-chat-id", default=os.environ.get("TELEGRAM_CHAT_ID", ""))
+    parser.add_argument("--telegram-alert-interval-s", type=float, default=env_float("TELEGRAM_ALERT_INTERVAL_S", 1.0))
+    parser.add_argument(
+        "--telegram-alert-message",
+        default=os.environ.get("TELEGRAM_ALERT_MESSAGE", DEFAULT_TELEGRAM_ALERT_MESSAGE),
+    )
     args = parser.parse_args()
 
-    root = os.path.dirname(os.path.abspath(__file__))
     base_dir = Path(root).parent
     static_dir = os.path.join(root, "static")
-    state = CsiState(base_dir)
+    logs = LogService(args.log_dir)
+    logs.info(
+        "startup",
+        "Servidor CSI inicializando.",
+        context={
+            "serial_port": args.serial_port,
+            "baud": args.baud,
+            "host": args.host,
+            "http_port": args.http_port,
+            "model_path": args.model_path,
+            "telegram_configured": bool(args.telegram_bot_token and args.telegram_chat_id),
+        },
+    )
+    inference = RealtimeApneaInference(
+        model_path=args.model_path,
+        window_s=args.inference_window_s,
+        step_s=args.inference_step_s,
+        target_hz=args.inference_target_hz,
+        log_service=logs,
+    )
+    notifier = TelegramNotifier(
+        bot_token=args.telegram_bot_token,
+        chat_id=args.telegram_chat_id,
+        interval_s=args.telegram_alert_interval_s,
+        message=args.telegram_alert_message,
+        log_service=logs,
+    )
+    state = CsiState(base_dir, inference, notifier, logs)
 
     reader = threading.Thread(
         target=serial_reader,
@@ -697,13 +1499,20 @@ def main():
     httpd = ThreadingHTTPServer((args.host, args.http_port), handler)
     print(f"CSI dashboard: http://{args.host}:{args.http_port}")
     print(f"Serial: {args.serial_port} @ {args.baud}")
+    print(f"Model: {args.model_path}")
+    print(f"Local env: {'loaded' if loaded_env else 'not found'} ({LOCAL_ENV_FILENAME})")
+    print(f"Telegram alerts: {'enabled' if notifier.enabled else 'disabled'}")
+    print(f"Logs: {logs.log_dir}")
+    logs.info("startup", "Servidor HTTP iniciado.", context={"url": f"http://{args.host}:{args.http_port}"})
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
         print("\nStopping CSI dashboard")
+        logs.info("startup", "Servidor detenido por teclado.")
     finally:
         state.recorder.stop("server_shutdown")
         httpd.server_close()
+        logs.info("startup", "Servidor cerrado.")
 
 
 if __name__ == "__main__":

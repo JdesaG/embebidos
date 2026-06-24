@@ -6,6 +6,8 @@ const state = {
   baseline: null,
   frameLimit: 360,
   activity: 0,
+  inference: null,
+  sensor: null,
   connected: false,
   lastRender: 0,
   presets: {},
@@ -49,6 +51,32 @@ const els = {
   collectionProgress: document.getElementById("collectionProgress"),
   stopCollectionBtn: document.getElementById("stopCollectionBtn"),
   collectionDetail: document.getElementById("collectionDetail"),
+  inferencePanel: document.getElementById("inferencePanel"),
+  inferenceStatus: document.getElementById("inferenceStatus"),
+  inferenceLabel: document.getElementById("inferenceLabel"),
+  inferenceDetail: document.getElementById("inferenceDetail"),
+  inferenceWindow: document.getElementById("inferenceWindow"),
+  inferenceRpm: document.getElementById("inferenceRpm"),
+  inferenceApneaProbability: document.getElementById("inferenceApneaProbability"),
+  inferenceConfidence: document.getElementById("inferenceConfidence"),
+  inferenceApneaTimer: document.getElementById("inferenceApneaTimer"),
+  inferencePc1: document.getElementById("inferencePc1"),
+  inferenceSubcarriers: document.getElementById("inferenceSubcarriers"),
+  inferenceLatency: document.getElementById("inferenceLatency"),
+  inferenceLastRun: document.getElementById("inferenceLastRun"),
+  notificationStatus: document.getElementById("notificationStatus"),
+  notificationSent: document.getElementById("notificationSent"),
+  sensorPanel: document.getElementById("sensorPanel"),
+  sensorStatus: document.getElementById("sensorStatus"),
+  sensorLabel: document.getElementById("sensorLabel"),
+  sensorDetail: document.getElementById("sensorDetail"),
+  sensorLastUpdate: document.getElementById("sensorLastUpdate"),
+  sensorTemp: document.getElementById("sensorTemp"),
+  sensorBpm: document.getElementById("sensorBpm"),
+  sensorSound: document.getElementById("sensorSound"),
+  sensorBuzzer: document.getElementById("sensorBuzzer"),
+  sensorPacketCount: document.getElementById("sensorPacketCount"),
+  sensorUptime: document.getElementById("sensorUptime"),
   roomCanvas: document.getElementById("roomCanvas"),
   amplitudeCanvas: document.getElementById("amplitudeCanvas"),
   heatmapCanvas: document.getElementById("heatmapCanvas"),
@@ -117,6 +145,25 @@ function formatSeconds(value) {
   const rest = seconds % 60;
   if (!minutes) return `${rest}s`;
   return `${minutes}m ${String(rest).padStart(2, "0")}s`;
+}
+
+function formatPercent(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "--";
+  return `${Math.round(Number(value) * 100)}%`;
+}
+
+function formatClock(value) {
+  if (!value) return "--";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "--";
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+function inferenceClass(stateName) {
+  if (stateName === "breathing") return "breathing";
+  if (stateName === "apnea") return "apnea";
+  if (stateName === "signal_bad" || stateName === "error") return "warning";
+  return "warming";
 }
 
 function setCollectionError(message) {
@@ -276,6 +323,98 @@ function computeActivity(amplitude) {
   return sum / len;
 }
 
+function updateInference(inference) {
+  if (!inference) return;
+  state.inference = inference;
+
+  const className = inferenceClass(inference.state);
+  els.inferencePanel.className = `panel wide inference-panel ${className}`;
+  els.inferenceStatus.className = `inference-status ${className}`;
+
+  els.inferenceLabel.textContent = inference.label || "Modelo";
+  els.inferenceDetail.textContent = inference.detail || "";
+  els.inferenceWindow.textContent =
+    `Ventana ${Math.round(inference.window_s || 0)}s | ` +
+    `refresco ${Math.round(inference.step_s || 0)}s | ` +
+    `${Math.round((inference.progress || 0) * 100)}% llena`;
+
+  els.inferenceRpm.textContent =
+    inference.rpm_estimate === null || inference.rpm_estimate === undefined
+      ? "-- RPM"
+      : `${Number(inference.rpm_estimate).toFixed(1)} RPM`;
+  els.inferenceApneaProbability.textContent = formatPercent(inference.apnea_probability);
+  els.inferenceConfidence.textContent = formatPercent(inference.confidence);
+  els.inferenceApneaTimer.textContent = formatSeconds(inference.apnea_duration_s || 0);
+  els.inferencePc1.textContent =
+    inference.pc1_var_explained === null || inference.pc1_var_explained === undefined
+      ? "--"
+      : Number(inference.pc1_var_explained).toFixed(2);
+  els.inferenceSubcarriers.textContent = inference.active_subcarriers || "--";
+  els.inferenceLatency.textContent =
+    inference.latency_min_s && inference.latency_max_s
+      ? `${Number(inference.latency_min_s).toFixed(0)}-${Number(inference.latency_max_s).toFixed(0)}s`
+      : "--";
+  els.inferenceLastRun.textContent = formatClock(inference.last_inference_at);
+}
+
+function updateNotifications(notifications) {
+  if (!notifications) return;
+  if (!notifications.enabled) {
+    els.notificationStatus.textContent = "Inactivo";
+    els.notificationSent.textContent = "0";
+    return;
+  }
+
+  els.notificationStatus.textContent = notifications.last_error ? "Error" : "Activo";
+  els.notificationSent.textContent = String(notifications.sent_count || 0);
+}
+
+function updateSensors(sensor, packetCount = 0) {
+  els.sensorPacketCount.textContent = String(packetCount || 0);
+
+  if (!sensor) {
+    els.sensorPanel.className = "panel wide sensor-panel waiting";
+    els.sensorStatus.className = "sensor-status waiting";
+    els.sensorLabel.textContent = "Sin datos";
+    els.sensorDetail.textContent = "La ESP emisora aun no envia SENSOR_DATA al receptor.";
+    els.sensorLastUpdate.textContent = "Esperando SENSOR_DATA";
+    els.sensorTemp.textContent = "-- C";
+    els.sensorBpm.textContent = "--";
+    els.sensorSound.textContent = "--";
+    els.sensorBuzzer.textContent = "--";
+    els.sensorUptime.textContent = "--";
+    return;
+  }
+
+  state.sensor = sensor;
+  const alerts = sensor.alerts || {};
+  const activeAlerts = [];
+  if (alerts.sound) activeAlerts.push("sonido");
+  if (alerts.bpm_high) activeAlerts.push("BPM alto");
+  if (alerts.temp_high) activeAlerts.push("temperatura alta");
+  if (alerts.temp_low) activeAlerts.push("temperatura baja");
+
+  const className = sensor.has_alert ? "alert" : "ok";
+  els.sensorPanel.className = `panel wide sensor-panel ${className}`;
+  els.sensorStatus.className = `sensor-status ${className}`;
+  els.sensorLabel.textContent = sensor.has_alert ? "Alerta activa" : "Sensores normales";
+  els.sensorDetail.textContent = activeAlerts.length
+    ? `Detectado: ${activeAlerts.join(", ")}.`
+    : "Temperatura, BPM y sonido dentro del estado esperado.";
+  els.sensorLastUpdate.textContent = `Ultima lectura ${formatClock(sensor.time ? sensor.time * 1000 : null)}`;
+  els.sensorTemp.textContent =
+    sensor.temperature_c === null || sensor.temperature_c === undefined
+      ? "-- C"
+      : `${Number(sensor.temperature_c).toFixed(1)} C`;
+  els.sensorBpm.textContent = String(sensor.bpm ?? "--");
+  els.sensorSound.textContent = sensor.sound_detected ? "Detectado" : "Normal";
+  els.sensorBuzzer.textContent =
+    sensor.buzzer_interval_ms > 0
+      ? `${sensor.buzzer_on ? "ON" : "Pulso"} / ${sensor.buzzer_interval_ms} ms`
+      : "Silencio";
+  els.sensorUptime.textContent = formatSeconds((sensor.uptime_ms || 0) / 1000);
+}
+
 function updateData(snapshot) {
   state.connected = snapshot.connected;
   els.status.classList.toggle("connected", snapshot.connected);
@@ -283,6 +422,9 @@ function updateData(snapshot) {
   els.packetCount.textContent = snapshot.packet_count ?? 0;
   els.serialInfo.textContent = `${snapshot.port || "--"} @ ${snapshot.baud || "--"}`;
   updateCollection(snapshot.collection);
+  updateInference(snapshot.inference);
+  updateNotifications(snapshot.notifications);
+  updateSensors(snapshot.latest_sensor, snapshot.sensor_packet_count);
 
   if (snapshot.last_error && !snapshot.connected) {
     els.subtitle.textContent = snapshot.last_error;

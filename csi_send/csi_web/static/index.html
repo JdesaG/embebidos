@@ -44,9 +44,109 @@
           <span>Actividad</span>
           <strong id="activityValue">--</strong>
         </article>
-      </section>
+        </section>
 
-      <section class="layout">
+        <section class="layout">
+          <section class="panel wide inference-panel" id="inferencePanel">
+          <div class="panel-head">
+            <h2>Modelo respiratorio</h2>
+            <span id="inferenceWindow">Esperando ventana</span>
+          </div>
+          <div class="inference-body">
+            <div class="inference-status" id="inferenceStatus">
+              <span class="inference-dot"></span>
+              <div>
+                <strong id="inferenceLabel">Modelo no disponible</strong>
+                <p id="inferenceDetail">Esperando datos del servidor.</p>
+              </div>
+            </div>
+            <div class="inference-grid">
+              <article>
+                <span>Respiración</span>
+                <strong id="inferenceRpm">-- RPM</strong>
+              </article>
+              <article>
+                <span>Prob. apnea</span>
+                <strong id="inferenceApneaProbability">--</strong>
+              </article>
+              <article>
+                <span>Confianza</span>
+                <strong id="inferenceConfidence">--</strong>
+              </article>
+              <article>
+                <span>Tiempo apnea</span>
+                <strong id="inferenceApneaTimer">0s</strong>
+              </article>
+              <article>
+                <span>PC1 calidad</span>
+                <strong id="inferencePc1">--</strong>
+              </article>
+              <article>
+                <span>Subportadoras útiles</span>
+                <strong id="inferenceSubcarriers">--</strong>
+              </article>
+              <article>
+                <span>Retardo estimado</span>
+                <strong id="inferenceLatency">--</strong>
+              </article>
+              <article>
+                <span>Última inferencia</span>
+                <strong id="inferenceLastRun">--</strong>
+              </article>
+              <article>
+                <span>Telegram</span>
+                <strong id="notificationStatus">--</strong>
+              </article>
+              <article>
+                <span>Alertas enviadas</span>
+                <strong id="notificationSent">0</strong>
+              </article>
+            </div>
+            </div>
+          </section>
+
+        <section class="panel wide sensor-panel" id="sensorPanel">
+          <div class="panel-head">
+            <h2>Sensores del emisor</h2>
+            <span id="sensorLastUpdate">Esperando SENSOR_DATA</span>
+          </div>
+          <div class="sensor-body">
+            <div class="sensor-status" id="sensorStatus">
+              <span class="sensor-dot"></span>
+              <div>
+                <strong id="sensorLabel">Sin datos</strong>
+                <p id="sensorDetail">La ESP emisora debe estar encendida y enviando paquetes de sensores por ESP-NOW.</p>
+              </div>
+            </div>
+            <div class="sensor-grid">
+              <article>
+                <span>Temperatura</span>
+                <strong id="sensorTemp">-- C</strong>
+              </article>
+              <article>
+                <span>BPM</span>
+                <strong id="sensorBpm">--</strong>
+              </article>
+              <article>
+                <span>Sonido</span>
+                <strong id="sensorSound">--</strong>
+              </article>
+              <article>
+                <span>Buzzer</span>
+                <strong id="sensorBuzzer">--</strong>
+              </article>
+              <article>
+                <span>Paquetes sensor</span>
+                <strong id="sensorPacketCount">0</strong>
+              </article>
+              <article>
+                <span>Uptime emisor</span>
+                <strong id="sensorUptime">--</strong>
+              </article>
+            </div>
+          </div>
+        </section>
+
         <section class="panel wide">
           <div class="panel-head">
             <h2>Recolección de dataset</h2>

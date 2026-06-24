@@ -2,3 +2,13 @@ build/
 .DS_Store
 __pycache__/
 *.pyc
+*.log
+*.jsonl
+.cache/
+**/.cache/
+**/.env.local
+**/logs/
+**/data/raw/
+**/data/metadata/
+**/data/processed/
+**/data/reports/
