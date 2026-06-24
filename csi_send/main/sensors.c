@@ -20,8 +20,8 @@
 #define ADC_POT     ADC_CHANNEL_7 /* GPIO35 en ESP32 */
 
 #define BPM_ALTO              100
-#define TEMP_MIN_BEBE_X10     200
-#define TEMP_MAX_BEBE_X10     220
+#define TEMP_MIN_BEBE_X10     100
+#define TEMP_MAX_BEBE_X10     350
 #define FAST_READ_INTERVAL_US 100000
 #define TEMP_READ_INTERVAL_US 2000000
 #define SOUND_ALERT_US        3000000
@@ -199,7 +199,7 @@ void sensors_init(void)
     gpio_config_t mic_cfg = {
         .pin_bit_mask = 1ULL << PIN_MIC,
         .mode = GPIO_MODE_INPUT,
-        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
         .intr_type = GPIO_INTR_DISABLE,
     };
