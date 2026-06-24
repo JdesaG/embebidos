@@ -3,6 +3,8 @@
 #include <string.h>
 
 #include "driver/gpio.h"
+#include "esp_adc/adc_cali.h"
+#include "esp_adc/adc_cali_scheme.h"
 #include "esp_adc/adc_oneshot.h"
 #include "esp_check.h"
 #include "esp_log.h"
@@ -24,11 +26,16 @@
 #define TEMP_READ_INTERVAL_US 2000000
 #define SOUND_ALERT_US        3000000
 #define SENSOR_SEND_US        1000000
+#define ADC_FALLBACK_VREF_MV  3300
+#define TMP36_OFFSET_MV       500
+#define TMP36_TEMP_OFFSET_X10 0
 
 static const char *TAG = "sensors";
 
 typedef struct {
     adc_oneshot_unit_handle_t adc1;
+    adc_cali_handle_t adc1_cali;
+    bool adc1_cali_ready;
     uint32_t seq;
     int16_t temp_c_x10;
     uint16_t bpm;
@@ -67,19 +74,32 @@ static int read_adc_raw(adc_channel_t channel)
     return clamp_int(raw, 0, 4095);
 }
 
+static int read_adc_mv(adc_channel_t channel)
+{
+    int raw = read_adc_raw(channel);
+    int voltage_mv = 0;
+
+    if (s_sensors.adc1_cali_ready
+            && adc_cali_raw_to_voltage(s_sensors.adc1_cali, raw, &voltage_mv) == ESP_OK) {
+        return voltage_mv;
+    }
+
+    /* Respaldo si la placa no soporta calibracion ADC: aproxima 0-4095 a 0-3.3 V. */
+    return (raw * ADC_FALLBACK_VREF_MV) / 4095;
+}
+
 static int16_t read_tmp36_x10(void)
 {
-    int raw = read_adc_raw(ADC_TMP36);
+    int voltage_mv = read_adc_mv(ADC_TMP36);
 
     /*
      * TMP36:
-     *   voltaje = raw * 3.3 / 4095
-     *   temperatura C = (voltaje - 0.5) * 100
+     *   500 mV equivalen a 0 C.
+     *   Cada 10 mV equivalen a 1 C.
+     *   temp_c_x10 = (mV - 500), porque 1 mV equivale a 0.1 C.
      * Guardamos C x10 para transmitir enteros y evitar floats en el payload.
      */
-    float voltage = ((float)raw * 3.3f) / 4095.0f;
-    float temp_x10 = (voltage - 0.5f) * 1000.0f;
-    return (int16_t)temp_x10;
+    return (int16_t)(voltage_mv - TMP36_OFFSET_MV + TMP36_TEMP_OFFSET_X10);
 }
 
 static uint16_t read_bpm_simulado(void)
@@ -149,6 +169,28 @@ static void update_buzzer_output(int64_t now_us)
     }
 }
 
+static void init_adc_calibration(void)
+{
+#if ADC_CALI_SCHEME_LINE_FITTING_SUPPORTED
+    adc_cali_line_fitting_config_t cali_config = {
+        .unit_id = ADC_UNIT_1,
+        .atten = ADC_ATTEN_DB_12,
+        .bitwidth = ADC_BITWIDTH_12,
+    };
+    esp_err_t ret = adc_cali_create_scheme_line_fitting(&cali_config, &s_sensors.adc1_cali);
+    s_sensors.adc1_cali_ready = (ret == ESP_OK);
+    if (s_sensors.adc1_cali_ready) {
+        ESP_LOGI(TAG, "Calibracion ADC activada para sensores analogicos");
+    } else {
+        ESP_LOGW(TAG, "ADC sin calibracion disponible: %s. Se usara conversion aproximada.",
+                 esp_err_to_name(ret));
+    }
+#else
+    s_sensors.adc1_cali_ready = false;
+    ESP_LOGW(TAG, "ADC calibration line fitting no soportado; se usara conversion aproximada.");
+#endif
+}
+
 void sensors_init(void)
 {
     memset(&s_sensors, 0, sizeof(s_sensors));
@@ -184,6 +226,7 @@ void sensors_init(void)
     };
     ESP_ERROR_CHECK(adc_oneshot_config_channel(s_sensors.adc1, ADC_TMP36, &chan_cfg));
     ESP_ERROR_CHECK(adc_oneshot_config_channel(s_sensors.adc1, ADC_POT, &chan_cfg));
+    init_adc_calibration();
 
     s_sensors.temp_c_x10 = read_tmp36_x10();
     s_sensors.bpm = read_bpm_simulado();
