@@ -5,6 +5,7 @@ import json
 import logging
 import math
 import os
+import sys
 import threading
 import time
 import urllib.error
@@ -1426,6 +1427,16 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 return
 
 
+class DashboardHTTPServer(ThreadingHTTPServer):
+    """HTTP server that treats a browser disconnect as an expected event."""
+
+    def handle_error(self, request, client_address):
+        exc_type, exc, _ = sys.exc_info()
+        if isinstance(exc, (BrokenPipeError, ConnectionResetError, TimeoutError)):
+            return
+        super().handle_error(request, client_address)
+
+
 def main():
     root = os.path.dirname(os.path.abspath(__file__))
     loaded_env = load_env_file(Path(root) / LOCAL_ENV_FILENAME)
@@ -1496,7 +1507,7 @@ def main():
             **handler_kwargs,
         )
 
-    httpd = ThreadingHTTPServer((args.host, args.http_port), handler)
+    httpd = DashboardHTTPServer((args.host, args.http_port), handler)
     print(f"CSI dashboard: http://{args.host}:{args.http_port}")
     print(f"Serial: {args.serial_port} @ {args.baud}")
     print(f"Model: {args.model_path}")

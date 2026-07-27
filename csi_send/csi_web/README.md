@@ -32,7 +32,7 @@ Si usas el Python de ESP-IDF:
 /Users/jandonyggarofalo/.espressif/tools/python/v5.5.4/venv/bin/python3 \
   csi_web/server.py \
   --serial-port /dev/cu.usbserial-0001 \
-  --model-path "/Users/jandonyggarofalo/Downloads/Apnea Model.joblib" \
+  --model-path "models/apnea_model_july_2026.joblib" \
   --baud 921600 \
   --http-port 8080
 ```
@@ -42,6 +42,24 @@ Abrir:
 ```text
 http://127.0.0.1:8080
 ```
+
+## Modelo de apnea (datos de julio)
+
+El modelo disponible en `models/apnea_model_july_2026.joblib` fue entrenado
+solamente con las sesiones del 25 de julio de 2026. Usa las mismas ocho
+características y ventanas de 20 s que calcula el dashboard, por lo que puede
+cargarse con el comando anterior.
+
+Para regenerarlo cuando se incorporen nuevas sesiones de julio:
+
+```sh
+/Users/jandonyggarofalo/.espressif/tools/python/v5.5.4/venv/bin/python3 \
+  csi_ml/train_apnea_model.py --month 202607
+```
+
+El resultado de la evaluación por sesiones completas queda en
+`data/reports/apnea_model_july_2026.json`. Es un detector experimental de
+retención simulada, no un dispositivo de diagnóstico médico.
 
 ## Alertas por Telegram
 
