@@ -6,16 +6,14 @@ Arquitectura actual:
 
 - `csi_send`: ESP32 emisora con bateria. Genera paquetes para CSI, lee sensores
   y activa el buzzer local.
-- `csi_recv`: ESP32 receptora conectada a la Mac. Recibe paquetes del emisor,
-  imprime `CSI_DATA` y tambien imprime `SENSOR_DATA`.
-- `csi_web/server.py`: corre en la Mac, lee el serial del receptor y muestra CSI,
+- `csi_recv`: ESP32 receptora. Recibe paquetes del emisor y envia datagramas
+  binarios UDP a la Mac.
+- `csi_web/server.py`: corre en la Mac, recibe UDP y muestra CSI,
   modelo respiratorio, sensores y notificaciones.
 
 ## Ejecutar
 
-Cerrar primero cualquier `idf.py monitor` que esté usando el puerto del receptor.
-
-Instalar dependencias ML en un entorno de Python que tenga acceso a `pyserial`:
+Instalar las dependencias ML:
 
 ```sh
 python3 -m pip install -r csi_web/requirements-ml.txt
@@ -24,17 +22,23 @@ python3 -m pip install -r csi_web/requirements-ml.txt
 Si usas el Python de ESP-IDF:
 
 ```sh
-/Users/jandonyggarofalo/.espressif/tools/python/v5.5.4/venv/bin/python3 \
+/Users/jandonyggarofalo/.espressif/python_env/idf5.5_py3.14_env/bin/python \
   -m pip install -r csi_web/requirements-ml.txt
 ```
 
 ```sh
-/Users/jandonyggarofalo/.espressif/tools/python/v5.5.4/venv/bin/python3 \
+python3 \
   csi_web/server.py \
-  --serial-port /dev/cu.usbserial-0001 \
   --model-path "models/apnea_model_july_2026.joblib" \
-  --baud 921600 \
-  --http-port 8080
+  --http-port 8080 \
+  --udp-port 5000
+```
+
+El servidor escucha la dashboard HTTP en `8080` y los datos UDP en `5000`. La
+ESP debe apuntar a la IP Wi-Fi de esta Mac, nunca a `127.0.0.1`:
+
+```text
+Destino UDP: IP_DE_LA_MAC:5000
 ```
 
 Abrir:
@@ -112,7 +116,9 @@ Los sensores estan conectados al emisor:
 - `GPIO26`: buzzer/parlante como salida digital.
 
 El emisor manda un paquete binario `sensor_payload_t` por ESP-NOW cada segundo.
-El receptor lo convierte a esta linea serial:
+El receptor lo empaqueta en datagramas UDP binarios enviados a la Mac. El servidor
+los transforma internamente a las mismas estructuras `CSI_DATA` y `SENSOR_DATA`
+que usan el dashboard, el modelo y la recolección.
 
 ```text
 SENSOR_DATA,seq,temp_c_x10,bpm,sound_detected,alert_sound,alert_bpm_high,alert_temp_high,alert_temp_low,buzzer_interval_ms,buzzer_on,uptime_ms
@@ -134,7 +140,7 @@ Archivos principales:
 
 - `app.log`: log rotativo para lectura humana.
 - `errors.jsonl`: eventos estructurados, un JSON por linea, con categorias
-  `startup`, `serial`, `parse`, `collection`, `ml`, `telegram` y `http`.
+  `startup`, `network`, `parse`, `collection`, `ml`, `telegram` y `http`.
 
 Puedes consultar el estado desde:
 
@@ -151,7 +157,8 @@ tail -f csi_web/logs/errors.jsonl
 
 ## Recolección desde la web
 
-La web y la recolección usan la misma lectura serial. No abras `idf.py monitor` sobre el puerto del receptor al mismo tiempo.
+La web y la recolección usan la misma ingesta UDP. El puerto USB de la ESP solo
+se necesita para flashear y revisar logs; ya no transporta los datos CSI.
 
 Flujo recomendado:
 

@@ -420,7 +420,9 @@ function updateData(snapshot) {
   els.status.classList.toggle("connected", snapshot.connected);
   els.statusText.textContent = snapshot.connected ? "Conectado" : "Desconectado";
   els.packetCount.textContent = snapshot.packet_count ?? 0;
-  els.serialInfo.textContent = `${snapshot.port || "--"} @ ${snapshot.baud || "--"}`;
+  els.serialInfo.textContent = snapshot.transport === "udp"
+    ? `UDP :${snapshot.network_port || "--"}`
+    : `${snapshot.port || "--"} @ ${snapshot.baud || "--"}`;
   updateCollection(snapshot.collection);
   updateInference(snapshot.inference);
   updateNotifications(snapshot.notifications);

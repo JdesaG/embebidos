@@ -3,9 +3,9 @@
 #include <stdint.h>
 
 /*
- * Paquete binario que csi_send envia por ESP-NOW y csi_recv transforma a una
- * linea SENSOR_DATA por serial. Mantenerlo pequeno evita interferir con el
- * trafico CSI de 100 Hz.
+ * Paquete binario que csi_send envia por ESP-NOW y csi_recv transforma al
+ * formato SENSOR_DATA dentro de lotes HTTP. Mantenerlo pequeno evita
+ * interferir con el trafico CSI de 100 Hz.
  */
 
 #define SENSOR_PAYLOAD_MAGIC   0x534e4553u /* "SENS" en little-endian */

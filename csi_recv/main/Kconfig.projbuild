@@ -1,0 +1,35 @@
+menu "CSI Receiver Network"
+
+config CSI_WIFI_SSID
+    string "Wi-Fi SSID"
+    default ""
+    help
+        SSID of the 2.4 GHz Wi-Fi network used by both ESP32 boards.
+
+config CSI_WIFI_PASSWORD
+    string "Wi-Fi password"
+    default ""
+    help
+        Password of the Wi-Fi network. Keep this value out of Git.
+
+config CSI_UDP_HOST
+    string "UDP destination host"
+    default "192.168.1.100"
+    help
+        IPv4 address or DNS name of the Mac running the CSI server.
+
+config CSI_UDP_PORT
+    int "UDP destination port"
+    range 1 65535
+    default 5000
+    help
+        UDP port listened to by the Mac CSI server.
+
+config CSI_UDP_QUEUE_LENGTH
+    int "UDP queue length"
+    range 4 64
+    default 32
+    help
+        Number of frames buffered between the CSI callback and UDP task.
+
+endmenu

@@ -18,10 +18,14 @@
 #include "nvs_flash.h"
 
 #include "esp_mac.h"
+#include "esp_event.h"
 #include "esp_log.h"
 #include "esp_wifi.h"
 #include "esp_netif.h"
 #include "esp_now.h"
+
+#include "freertos/FreeRTOS.h"
+#include "freertos/event_groups.h"
 
 #include "sensors.h"
 
@@ -31,18 +35,13 @@
  * Lenguaje: C, no C++.
  * Rol en el proyecto:
  *   1. Configura la radio WiFi.
- *   2. Usa ESP-NOW para transmitir paquetes a una frecuencia fija.
- *   3. Esos paquetes viajan por el aire y son recibidos por csi_recv.
- *   4. El receptor, no este emisor, extrae el CSI de los paquetes recibidos.
+ *   2. Se conecta a la red WiFi configurada al arrancar.
+ *   3. Usa ESP-NOW para transmitir paquetes a una frecuencia fija.
+ *   4. Esos paquetes viajan por el aire y son recibidos por csi_recv.
+ *   5. El receptor, no este emisor, extrae el CSI de los paquetes recibidos.
  *
  * Si cambias este archivo, flashealo solo en la placa emisora.
  */
-
-/* Canal WiFi usado por emisor y receptor. Ambas placas deben usar el mismo
- * canal. Si este valor difiere de csi_recv, el receptor no vera paquetes y
- * no se producira CSI.
- */
-#define CONFIG_LESS_INTERFERENCE_CHANNEL   11
 
 /* Configuracion de radio WiFi dependiente del chip objetivo.
  * HT40 usa un canal mas ancho que HT20 y normalmente produce mas subportadoras
@@ -87,25 +86,70 @@ static const uint8_t CONFIG_CSI_SEND_MAC[] = {0x1a, 0x00, 0x00, 0x00, 0x00, 0x00
 /* Etiqueta de log que aparece en el monitor de ESP-IDF. */
 static const char *TAG = "csi_send";
 
-/* Configura el hardware WiFi antes de iniciar ESP-NOW.
- * No se conecta a un router; pone la ESP32 en modo estacion para que pueda
- * usar la radio WiFi y enviar tramas ESP-NOW.
+/* Conecta la emisora al mismo router que usa csi_recv. ESP-NOW usara el
+ * canal actual de esta interfaz STA, por lo que ya no se fuerza el canal 11.
  */
-static void wifi_init()
-{
-    /* Crea el bucle de eventos por defecto usado internamente por WiFi en ESP-IDF. */
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
+static EventGroupHandle_t s_wifi_event_group;
+static const EventBits_t WIFI_GOT_IP_BIT = BIT0;
 
-    /* Inicializa la interfaz de red y la memoria del driver WiFi. */
+static void wifi_event_handler(void *arg, esp_event_base_t event_base,
+                               int32_t event_id, void *event_data)
+{
+    (void)arg;
+    (void)event_data;
+    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
+        esp_wifi_connect();
+    } else if (event_base == WIFI_EVENT &&
+               event_id == WIFI_EVENT_STA_DISCONNECTED) {
+        xEventGroupClearBits(s_wifi_event_group, WIFI_GOT_IP_BIT);
+        ESP_LOGW(TAG, "WiFi desconectado; reintentando");
+        esp_wifi_connect();
+    }
+}
+
+static void ip_event_handler(void *arg, esp_event_base_t event_base,
+                             int32_t event_id, void *event_data)
+{
+    (void)arg;
+    if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
+        const ip_event_got_ip_t *event = (const ip_event_got_ip_t *)event_data;
+        ESP_LOGI(TAG, "IP obtenida: " IPSTR, IP2STR(&event->ip_info.ip));
+        xEventGroupSetBits(s_wifi_event_group, WIFI_GOT_IP_BIT);
+    }
+}
+
+static void wifi_init(void)
+{
     ESP_ERROR_CHECK(esp_netif_init());
+    ESP_ERROR_CHECK(esp_event_loop_create_default());
+    if (esp_netif_create_default_wifi_sta() == NULL) {
+        ESP_LOGE(TAG, "No se pudo crear la interfaz STA");
+        abort();
+    }
+
+    s_wifi_event_group = xEventGroupCreate();
+    if (!s_wifi_event_group) {
+        ESP_LOGE(TAG, "No se pudo crear el grupo de eventos WiFi");
+        abort();
+    }
+
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID,
+                                               wifi_event_handler, NULL));
+    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP,
+                                               ip_event_handler, NULL));
 
-    /* El modo estacion es suficiente para ESP-NOW. No se requiere conexion a router. */
+    wifi_config_t wifi_config = {0};
+    strncpy((char *)wifi_config.sta.ssid, CONFIG_CSI_WIFI_SSID,
+            sizeof(wifi_config.sta.ssid) - 1);
+    strncpy((char *)wifi_config.sta.password, CONFIG_CSI_WIFI_PASSWORD,
+            sizeof(wifi_config.sta.password) - 1);
+    wifi_config.sta.threshold.authmode = WIFI_AUTH_OPEN;
+
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-
-    /* Guarda la configuracion WiFi en RAM, no en flash. Asi los cambios de prueba son temporales. */
     ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
 
 #if CONFIG_IDF_TARGET_ESP32C5
     /* Los chips C5/C6/C61 usan APIs nuevas multibanda. */
@@ -144,32 +188,25 @@ static void wifi_init()
      */
     ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
 
-    /* Fuerza la radio al canal elegido. En HT40, el canal secundario se coloca
-     * debajo. Emisor y receptor deben usar la misma configuracion de canal.
-     */
-#if CONFIG_IDF_TARGET_ESP32C5
-    if ((CONFIG_WIFI_BAND_MODE == WIFI_BAND_MODE_2G_ONLY && CONFIG_WIFI_2G_BANDWIDTHS == WIFI_BW_HT20)
-            || (CONFIG_WIFI_BAND_MODE == WIFI_BAND_MODE_5G_ONLY && CONFIG_WIFI_5G_BANDWIDTHS == WIFI_BW_HT20)) {
-        ESP_ERROR_CHECK(esp_wifi_set_channel(CONFIG_LESS_INTERFERENCE_CHANNEL, WIFI_SECOND_CHAN_NONE));
-    } else {
-        ESP_ERROR_CHECK(esp_wifi_set_channel(CONFIG_LESS_INTERFERENCE_CHANNEL, WIFI_SECOND_CHAN_BELOW));
-    }
-#elif (CONFIG_IDF_TARGET_ESP32C6 && ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 4, 0)) || CONFIG_IDF_TARGET_ESP32C61
-    if (CONFIG_WIFI_BAND_MODE == WIFI_BAND_MODE_2G_ONLY && CONFIG_WIFI_2G_BANDWIDTHS == WIFI_BW_HT20) {
-        ESP_ERROR_CHECK(esp_wifi_set_channel(CONFIG_LESS_INTERFERENCE_CHANNEL, WIFI_SECOND_CHAN_NONE));
-    } else {
-        ESP_ERROR_CHECK(esp_wifi_set_channel(CONFIG_LESS_INTERFERENCE_CHANNEL, WIFI_SECOND_CHAN_BELOW));
-    }
-#else
-    if (CONFIG_WIFI_BANDWIDTH == WIFI_BW_HT20) {
-        ESP_ERROR_CHECK(esp_wifi_set_channel(CONFIG_LESS_INTERFERENCE_CHANNEL, WIFI_SECOND_CHAN_NONE));
-    } else {
-        ESP_ERROR_CHECK(esp_wifi_set_channel(CONFIG_LESS_INTERFERENCE_CHANNEL, WIFI_SECOND_CHAN_BELOW));
-    }
-#endif
-
     /* Aplica la MAC fija del emisor para que el receptor pueda identificar esta placa. */
     ESP_ERROR_CHECK(esp_wifi_set_mac(WIFI_IF_STA, CONFIG_CSI_SEND_MAC));
+}
+
+static bool wifi_wait_for_ip(void)
+{
+    EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group, WIFI_GOT_IP_BIT,
+                                           pdFALSE, pdFALSE,
+                                           pdMS_TO_TICKS(30000));
+    if ((bits & WIFI_GOT_IP_BIT) == 0) {
+        ESP_LOGE(TAG, "No se obtuvo IP en 30 segundos; revisa SSID y password");
+        return false;
+    }
+
+    uint8_t primary = 0;
+    wifi_second_chan_t secondary = WIFI_SECOND_CHAN_NONE;
+    ESP_ERROR_CHECK(esp_wifi_get_channel(&primary, &secondary));
+    ESP_LOGI(TAG, "Canal WiFi actual: %u", primary);
+    return true;
 }
 
 /* Inicializa ESP-NOW y registra el peer que recibira paquetes.
@@ -217,6 +254,10 @@ void app_main()
      * @brief Inicializa WiFi
      */
     wifi_init();
+    while (!wifi_wait_for_ip()) {
+        ESP_LOGW(TAG, "Esperando una conexion WiFi valida para iniciar ESP-NOW");
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
 
     /**
      * @brief Inicializa ESP-NOW
@@ -224,7 +265,8 @@ void app_main()
      *        https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/network/esp_now.html
      */
     esp_now_peer_info_t peer = {
-        .channel   = CONFIG_LESS_INTERFERENCE_CHANNEL,
+        /* 0: usa el canal actual de la interfaz STA asociada al router. */
+        .channel   = 0,
         .ifidx     = WIFI_IF_STA,
         .encrypt   = false,
         /* MAC broadcast: envia paquetes para que el receptor los escuche sin conocer
@@ -236,8 +278,8 @@ void app_main()
     sensors_init();
 
     ESP_LOGI(TAG, "================ CSI SEND ================");
-    ESP_LOGI(TAG, "wifi_channel: %d, send_frequency: %d, mac: " MACSTR,
-             CONFIG_LESS_INTERFERENCE_CHANNEL, CONFIG_SEND_FREQUENCY, MAC2STR(CONFIG_CSI_SEND_MAC));
+    ESP_LOGI(TAG, "send_frequency: %d, mac: " MACSTR,
+             CONFIG_SEND_FREQUENCY, MAC2STR(CONFIG_CSI_SEND_MAC));
     ESP_LOGI(TAG, "Sensores activos: SENSOR_DATA se enviara al receptor cada 1 s");
 
     /* Bucle infinito: envia continuamente un contador.

@@ -5,6 +5,8 @@ import json
 import logging
 import math
 import os
+import socket
+import struct
 import sys
 import threading
 import time
@@ -18,16 +20,6 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from io import StringIO
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-
-try:
-    import serial
-except ImportError as exc:
-    raise SystemExit(
-        "Missing pyserial. Run with the ESP-IDF Python, for example:\n"
-        "/Users/jandonyggarofalo/.espressif/tools/python/v5.5.4/venv/bin/python3 "
-        "csi_web/server.py --serial-port /dev/cu.usbserial-0001"
-    ) from exc
-
 
 CLASSIC_COLUMNS = [
     "type",
@@ -89,6 +81,16 @@ SENSOR_COLUMNS = [
     "buzzer_on",
     "uptime_ms",
 ]
+
+WIRE_BATCH_HEADER = struct.Struct("<4sBBH")
+WIRE_FRAME_HEADER = struct.Struct("<BBHI")
+WIRE_CSI_BODY = struct.Struct("<IbbBBHHBB6s")
+WIRE_SENSOR_BODY = struct.Struct("<IHHIhHBBHBBI")
+WIRE_BATCH_MAGIC = b"CSIH"
+WIRE_BATCH_VERSION = 1
+WIRE_FRAME_CSI = 1
+WIRE_FRAME_SENSOR = 2
+WIRE_MAX_BODY = 64 * 1024
 
 COLLECTION_PRESETS = {
     "empty_off": {
@@ -192,6 +194,7 @@ LOCAL_ENV_FILENAME = ".env.local"
 DEFAULT_LOG_DIRNAME = "logs"
 LOG_CATEGORIES = {
     "startup": "Arranque y configuracion del servidor.",
+    "network": "Recepcion HTTP de datos CSI y sensores.",
     "serial": "Conexion, desconexion o lectura del puerto serial.",
     "parse": "Lineas CSI recibidas con formato invalido.",
     "collection": "Inicio, escritura o cierre de sesiones CSV.",
@@ -1047,7 +1050,7 @@ class CsiRecorder:
 
 
 class CsiState:
-    def __init__(self, base_dir, inference, notifier, log_service=None):
+    def __init__(self, base_dir, inference, notifier, log_service=None, udp_port=5000):
         self.condition = threading.Condition()
         self.logs = log_service or NullLogService()
         self.recorder = CsiRecorder(base_dir, self.logs)
@@ -1057,6 +1060,10 @@ class CsiState:
         self.latest_sensor = None
         self.seq = 0
         self.connected = False
+        self.transport = "udp"
+        self.network_port = int(udp_port)
+        self.udp_port = int(udp_port)
+        self.last_packet_monotonic = 0.0
         self.port = ""
         self.baud = 0
         self.packet_count = 0
@@ -1102,6 +1109,9 @@ class CsiState:
         self.inference.add_sample(payload)
         self.notifier.update(self.inference.snapshot())
         with self.condition:
+            self.connected = True
+            self.last_packet_monotonic = time.monotonic()
+            self.last_error = ""
             self.latest = payload
             self.last_raw = raw
             self.seq += 1
@@ -1110,6 +1120,9 @@ class CsiState:
 
     def publish_sensor(self, payload, raw):
         with self.condition:
+            self.connected = True
+            self.last_packet_monotonic = time.monotonic()
+            self.last_error = ""
             self.latest_sensor = payload
             self.last_raw = raw
             self.seq += 1
@@ -1124,14 +1137,19 @@ class CsiState:
             self.condition.notify_all()
         self.logs.warning(
             "parse",
-            "Linea CSI no pudo ser interpretada.",
+            "Trama CSI no pudo ser interpretada.",
             context={"error": error, "raw": truncate_text(raw, 300)},
         )
 
     def snapshot(self):
         with self.condition:
+            connected = self.connected and (
+                time.monotonic() - self.last_packet_monotonic <= 3.0
+            )
             snapshot = {
-                "connected": self.connected,
+                "connected": connected,
+                "transport": self.transport,
+                "network_port": self.network_port,
                 "port": self.port,
                 "baud": self.baud,
                 "packet_count": self.packet_count,
@@ -1270,47 +1288,196 @@ def parse_sensor_line(line):
     }
 
 
-def serial_reader(state, serial_port, baud):
-    state.set_serial_config(serial_port, baud)
-    state.logs.info("serial", "Lector serial iniciado.", context={"port": serial_port, "baud": baud})
+def _canonical_csi_line(record, format_name, raw):
+    data_text = json.dumps(raw, separators=(",", ":"))
+    if format_name == "esp32_c5_c6":
+        values = [
+            "CSI_DATA",
+            record["id"],
+            record["mac"],
+            record["rssi"],
+            record["rate"],
+            record["noise_floor"],
+            record.get("fft_gain", 0),
+            record.get("agc_gain", 0),
+            record["channel"],
+            record["local_timestamp"],
+            record["sig_len"],
+            record.get("rx_state", 0),
+            record["len"],
+            record["first_word"],
+        ]
+    else:
+        values = [
+            "CSI_DATA",
+            record["id"],
+            record["mac"],
+            record["rssi"],
+            record["rate"],
+            record.get("sig_mode", 1),
+            record.get("mcs", 0),
+            record.get("bandwidth", 1),
+            record.get("smoothing", 0),
+            record.get("not_sounding", 0),
+            record.get("aggregation", 0),
+            record.get("stbc", 0),
+            record.get("fec_coding", 0),
+            record.get("sgi", 0),
+            record["noise_floor"],
+            record.get("ampdu_cnt", 0),
+            record["channel"],
+            record.get("secondary_channel", 0),
+            record["local_timestamp"],
+            record.get("ant", 0),
+            record["sig_len"],
+            record.get("rx_state", 0),
+            record["len"],
+            record["first_word"],
+        ]
+    return ",".join(str(value) for value in values) + ',"' + data_text + '"'
 
-    while True:
-        try:
-            with serial.Serial(serial_port, baudrate=baud, timeout=1) as dev:
-                state.set_connected(True, "")
-                while True:
-                    raw_bytes = dev.readline()
-                    if not raw_bytes:
-                        continue
 
-                    line = raw_bytes.decode("utf-8", errors="replace").strip()
-                    if not line:
-                        continue
+def decode_udp_batch(body):
+    if len(body) < WIRE_BATCH_HEADER.size:
+        raise ValueError("UDP body demasiado corto")
+    if len(body) > WIRE_MAX_BODY:
+        raise ValueError("UDP body demasiado grande")
 
-                    try:
-                        sensor_payload = parse_sensor_line(line)
-                        if sensor_payload is not None:
-                            state.publish_sensor(sensor_payload, line)
-                            continue
-                    except Exception as exc:
-                        state.add_parse_error(line, str(exc))
-                        continue
+    magic, version, frame_count, _reserved = WIRE_BATCH_HEADER.unpack_from(body)
+    if magic != WIRE_BATCH_MAGIC:
+        raise ValueError("magic UDP CSI invalido")
+    if version != WIRE_BATCH_VERSION:
+        raise ValueError(f"version UDP CSI no soportada: {version}")
+    if frame_count < 1 or frame_count > 8:
+        raise ValueError(f"cantidad de frames invalida: {frame_count}")
 
-                    try:
-                        record, format_name, raw = parse_csi_record(line)
-                        if record is None:
-                            continue
-                        payload = build_payload(record, format_name, raw)
-                    except Exception as exc:
-                        state.add_parse_error(line, str(exc))
-                        state.recorder.record_corrupt(line, str(exc))
-                        continue
+    offset = WIRE_BATCH_HEADER.size
+    decoded = []
+    for _index in range(frame_count):
+        if offset + WIRE_FRAME_HEADER.size > len(body):
+            raise ValueError("frame UDP incompleto")
+        frame_type, _flags, frame_len, seq = WIRE_FRAME_HEADER.unpack_from(body, offset)
+        if frame_len < WIRE_FRAME_HEADER.size or offset + frame_len > len(body):
+            raise ValueError("longitud de frame UDP invalida")
+        frame_start = offset + WIRE_FRAME_HEADER.size
+        frame_end = offset + frame_len
 
-                    state.recorder.record_sample(line, record)
-                    state.publish(payload, line)
-        except Exception as exc:
-            state.set_connected(False, str(exc))
-            time.sleep(1.5)
+        if frame_type == WIRE_FRAME_CSI:
+            if frame_start + WIRE_CSI_BODY.size > frame_end:
+                raise ValueError("CSI UDP incompleto")
+            (
+                timestamp,
+                rssi,
+                noise_floor,
+                rate,
+                channel,
+                sig_len,
+                csi_len,
+                first_word,
+                format_id,
+                mac_bytes,
+            ) = WIRE_CSI_BODY.unpack_from(body, frame_start)
+            data_start = frame_start + WIRE_CSI_BODY.size
+            data_size = csi_len * 2
+            if data_start + data_size > frame_end:
+                raise ValueError("vector CSI UDP incompleto")
+            raw = list(struct.unpack_from(f"<{csi_len}h", body, data_start))
+            mac = ":".join(f"{value:02x}" for value in mac_bytes)
+            format_name = "esp32_c5_c6" if format_id else "esp32"
+            record = {
+                "type": "CSI_DATA",
+                "id": seq,
+                "mac": mac,
+                "rssi": rssi,
+                "rate": rate,
+                "noise_floor": noise_floor,
+                "channel": channel,
+                "local_timestamp": timestamp,
+                "sig_len": sig_len,
+                "rx_state": 0,
+                "len": csi_len,
+                "first_word": first_word,
+                "data": json.dumps(raw, separators=(",", ":")),
+            }
+            if format_name == "esp32_c5_c6":
+                record.update({"fft_gain": 0, "agc_gain": 0})
+            else:
+                record.update(
+                    {
+                        "sig_mode": 1,
+                        "mcs": 0,
+                        "bandwidth": 1,
+                        "smoothing": 0,
+                        "not_sounding": 0,
+                        "aggregation": 0,
+                        "stbc": 0,
+                        "fec_coding": 0,
+                        "sgi": 0,
+                        "ampdu_cnt": 0,
+                        "secondary_channel": 0,
+                        "ant": 0,
+                    }
+                )
+            raw_line = _canonical_csi_line(record, format_name, raw)
+            payload = build_payload(record, format_name, raw)
+            decoded.append(("csi", payload, raw_line, record))
+        elif frame_type == WIRE_FRAME_SENSOR:
+            if frame_start + WIRE_SENSOR_BODY.size > frame_end:
+                raise ValueError("SENSOR_DATA UDP incompleto")
+            sensor_values = WIRE_SENSOR_BODY.unpack_from(body, frame_start)
+            (
+                magic_sensor,
+                sensor_version,
+                sensor_size,
+                sensor_seq,
+                temp_c_x10,
+                bpm,
+                sound_detected,
+                alert_flags,
+                buzzer_interval_ms,
+                buzzer_on,
+                _reserved,
+                uptime_ms,
+            ) = sensor_values
+            if magic_sensor != 0x534E4553 or sensor_version != 1 or sensor_size != WIRE_SENSOR_BODY.size:
+                raise ValueError("SENSOR_DATA UDP invalido")
+            sensor_line = (
+                "SENSOR_DATA,{},{},{},{},{},{},{},{},{},{},{}".format(
+                    sensor_seq,
+                    temp_c_x10,
+                    bpm,
+                    sound_detected,
+                    1 if alert_flags & 1 else 0,
+                    1 if alert_flags & 2 else 0,
+                    1 if alert_flags & 4 else 0,
+                    1 if alert_flags & 8 else 0,
+                    buzzer_interval_ms,
+                    buzzer_on,
+                    uptime_ms,
+                )
+            )
+            decoded.append(("sensor", parse_sensor_line(sensor_line), sensor_line, None))
+        else:
+            raise ValueError(f"tipo de frame UDP desconocido: {frame_type}")
+        offset = frame_end
+
+    if offset != len(body):
+        raise ValueError("bytes extra al final del body UDP")
+    return decoded
+
+
+def publish_decoded_batch(state, decoded):
+    csi_count = 0
+    sensor_count = 0
+    for kind, payload, raw_line, record in decoded:
+        if kind == "csi":
+            state.recorder.record_sample(raw_line, record)
+            state.publish(payload, raw_line)
+            csi_count += 1
+        else:
+            state.publish_sensor(payload, raw_line)
+            sensor_count += 1
+    return csi_count, sensor_count
 
 
 class DashboardHandler(SimpleHTTPRequestHandler):
@@ -1345,6 +1512,25 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         super().do_GET()
 
     def do_POST(self):
+        if self.path == "/api/ingest":
+            try:
+                body = self.read_binary_body()
+                decoded = decode_udp_batch(body)
+                csi_count, sensor_count = publish_decoded_batch(self.state, decoded)
+                self.send_json(
+                    {
+                        "ok": True,
+                        "frames": len(decoded),
+                        "csi": csi_count,
+                        "sensors": sensor_count,
+                    }
+                )
+            except Exception as exc:
+                self.state.add_parse_error("HTTP /api/ingest", str(exc))
+                self.state.logs.error("network", "No se pudo decodificar ingesta HTTP.", exc=exc)
+                self.send_json({"ok": False, "error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+            return
+
         if self.path == "/api/reset":
             with self.state.condition:
                 self.state.packet_count = 0
@@ -1386,6 +1572,14 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             return {}
         body = self.rfile.read(content_length).decode("utf-8")
         return json.loads(body)
+
+    def read_binary_body(self):
+        content_length = int(self.headers.get("Content-Length", "0"))
+        if content_length <= 0:
+            raise ValueError("HTTP body vacio")
+        if content_length > WIRE_MAX_BODY:
+            raise ValueError("HTTP body supera el limite permitido")
+        return self.rfile.read(content_length)
 
     def send_json(self, payload, status=HTTPStatus.OK):
         body = json.dumps(payload).encode("utf-8")
@@ -1437,15 +1631,63 @@ class DashboardHTTPServer(ThreadingHTTPServer):
         super().handle_error(request, client_address)
 
 
+class UdpIngestServer:
+    """Receives CSI wire datagrams while the HTTP server serves the dashboard."""
+
+    def __init__(self, host, port, state):
+        self.host = host
+        self.port = int(port)
+        self.state = state
+        self.sock = None
+        self.stop_event = threading.Event()
+        self.thread = None
+
+    def start(self):
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.sock.bind((self.host, self.port))
+        self.sock.settimeout(1.0)
+        self.thread = threading.Thread(target=self.run, name="csi-udp", daemon=True)
+        self.thread.start()
+
+    def run(self):
+        while not self.stop_event.is_set():
+            try:
+                body, address = self.sock.recvfrom(WIRE_MAX_BODY)
+            except socket.timeout:
+                continue
+            except OSError:
+                return
+
+            try:
+                decoded = decode_udp_batch(body)
+                publish_decoded_batch(self.state, decoded)
+            except Exception as exc:
+                source = f"UDP {address[0]}:{address[1]}"
+                self.state.add_parse_error(source, str(exc))
+                self.state.logs.error(
+                    "network",
+                    "No se pudo decodificar datagrama UDP.",
+                    context={"source": source, "error": str(exc)},
+                )
+
+    def stop(self):
+        self.stop_event.set()
+        if self.sock is not None:
+            self.sock.close()
+        if self.thread is not None:
+            self.thread.join(timeout=2)
+
+
 def main():
     root = os.path.dirname(os.path.abspath(__file__))
     loaded_env = load_env_file(Path(root) / LOCAL_ENV_FILENAME)
 
     parser = argparse.ArgumentParser(description="Local ESP CSI web dashboard")
-    parser.add_argument("--serial-port", default="/dev/cu.usbserial-0001")
-    parser.add_argument("--baud", type=int, default=921600)
-    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--http-port", type=int, default=8080)
+    parser.add_argument("--udp-host", default="0.0.0.0")
+    parser.add_argument("--udp-port", type=int, default=5000)
     parser.add_argument("--model-path", default=DEFAULT_MODEL_PATH)
     parser.add_argument("--log-dir", default=os.environ.get("CSI_WEB_LOG_DIR", str(Path(root) / DEFAULT_LOG_DIRNAME)))
     parser.add_argument("--inference-window-s", type=float, default=20.0)
@@ -1467,10 +1709,10 @@ def main():
         "startup",
         "Servidor CSI inicializando.",
         context={
-            "serial_port": args.serial_port,
-            "baud": args.baud,
             "host": args.host,
             "http_port": args.http_port,
+            "udp_host": args.udp_host,
+            "udp_port": args.udp_port,
             "model_path": args.model_path,
             "telegram_configured": bool(args.telegram_bot_token and args.telegram_chat_id),
         },
@@ -1489,14 +1731,7 @@ def main():
         message=args.telegram_alert_message,
         log_service=logs,
     )
-    state = CsiState(base_dir, inference, notifier, logs)
-
-    reader = threading.Thread(
-        target=serial_reader,
-        args=(state, args.serial_port, args.baud),
-        daemon=True,
-    )
-    reader.start()
+    state = CsiState(base_dir, inference, notifier, logs, udp_port=args.udp_port)
 
     DashboardHandler.state = state
 
@@ -1508,8 +1743,10 @@ def main():
         )
 
     httpd = DashboardHTTPServer((args.host, args.http_port), handler)
+    udp_server = UdpIngestServer(args.udp_host, args.udp_port, state)
+    udp_server.start()
     print(f"CSI dashboard: http://{args.host}:{args.http_port}")
-    print(f"Serial: {args.serial_port} @ {args.baud}")
+    print(f"CSI ingest: UDP {args.udp_host}:{args.udp_port}")
     print(f"Model: {args.model_path}")
     print(f"Local env: {'loaded' if loaded_env else 'not found'} ({LOCAL_ENV_FILENAME})")
     print(f"Telegram alerts: {'enabled' if notifier.enabled else 'disabled'}")
@@ -1522,6 +1759,7 @@ def main():
         logs.info("startup", "Servidor detenido por teclado.")
     finally:
         state.recorder.stop("server_shutdown")
+        udp_server.stop()
         httpd.server_close()
         logs.info("startup", "Servidor cerrado.")
 
