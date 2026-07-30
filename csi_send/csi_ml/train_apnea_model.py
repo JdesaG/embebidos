@@ -219,6 +219,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--label-purity", type=float, default=1.0)
     parser.add_argument("--respiratory-low-hz", type=float, default=0.1)
     parser.add_argument("--respiratory-high-hz", type=float, default=0.5)
+    parser.add_argument("--model-c", type=float, default=0.3, help="Logistic-regression regularization selected by session-wise validation.")
+    parser.add_argument("--apnea-class-weight", type=float, default=3.0, help="Relative training weight for the simulated-apnea class.")
     parser.add_argument("--random-state", type=int, default=42)
     return parser.parse_args()
 
@@ -254,7 +256,12 @@ def main() -> int:
     train_mask, test_mask, split = split_groups(groups, y)
     candidate = Pipeline([
         ("scaler", StandardScaler()),
-        ("model", LogisticRegression(C=1.0, class_weight={0: 1, 1: 2}, max_iter=2000, random_state=args.random_state)),
+        ("model", LogisticRegression(
+            C=args.model_c,
+            class_weight={0: 1, 1: args.apnea_class_weight},
+            max_iter=2000,
+            random_state=args.random_state,
+        )),
     ])
     candidate.fit(X[train_mask], y[train_mask])
     predicted = candidate.predict(X[test_mask])
@@ -265,7 +272,12 @@ def main() -> int:
     # measurement; the report makes that distinction explicit.
     final_pipeline = Pipeline([
         ("scaler", StandardScaler()),
-        ("model", LogisticRegression(C=1.0, class_weight={0: 1, 1: 2}, max_iter=2000, random_state=args.random_state)),
+        ("model", LogisticRegression(
+            C=args.model_c,
+            class_weight={0: 1, 1: args.apnea_class_weight},
+            max_iter=2000,
+            random_state=args.random_state,
+        )),
     ])
     final_pipeline.fit(X, y)
     output_path = (base_dir / args.output).resolve()
@@ -282,7 +294,8 @@ def main() -> int:
             "target_hz": args.target_hz,
             "respiratory_band_hz": [args.respiratory_low_hz, args.respiratory_high_hz],
             "label_purity": args.label_purity,
-            "class_weight": {"breathing": 1, "apnea": 2},
+            "model_c": args.model_c,
+            "class_weight": {"breathing": 1, "apnea": args.apnea_class_weight},
             "feature_pipeline": "Matches csi_web.server.RealtimeApneaInference",
         },
     }

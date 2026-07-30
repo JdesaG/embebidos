@@ -7,12 +7,16 @@ const state = {
   frameLimit: 360,
   activity: 0,
   inference: null,
+  modelHistory: [],
+  lastInferenceAt: null,
   sensor: null,
   connected: false,
   lastRender: 0,
   presets: {},
   collection: null,
   durationTouched: false,
+  collectionPhaseKey: null,
+  audioContext: null,
   room: {
     width: 5,
     height: 4,
@@ -51,6 +55,16 @@ const els = {
   collectionProgress: document.getElementById("collectionProgress"),
   stopCollectionBtn: document.getElementById("stopCollectionBtn"),
   collectionDetail: document.getElementById("collectionDetail"),
+  protocolClock: document.getElementById("protocolClock"),
+  protocolPhase: document.getElementById("protocolPhase"),
+  protocolStart: document.getElementById("protocolStart"),
+  protocolElapsed: document.getElementById("protocolElapsed"),
+  protocolPhaseRemaining: document.getElementById("protocolPhaseRemaining"),
+  protocolNext: document.getElementById("protocolNext"),
+  protocolTimeline: document.getElementById("protocolTimeline"),
+  protocolSchedule: document.getElementById("protocolSchedule"),
+  protocolInstruction: document.getElementById("protocolInstruction"),
+  alarmToggle: document.getElementById("alarmToggle"),
   inferencePanel: document.getElementById("inferencePanel"),
   inferenceStatus: document.getElementById("inferenceStatus"),
   inferenceLabel: document.getElementById("inferenceLabel"),
@@ -64,6 +78,10 @@ const els = {
   inferenceSubcarriers: document.getElementById("inferenceSubcarriers"),
   inferenceLatency: document.getElementById("inferenceLatency"),
   inferenceLastRun: document.getElementById("inferenceLastRun"),
+  modelDebugDecision: document.getElementById("modelDebugDecision"),
+  modelSignalCanvas: document.getElementById("modelSignalCanvas"),
+  modelProbabilityCanvas: document.getElementById("modelProbabilityCanvas"),
+  modelFeatures: document.getElementById("modelFeatures"),
   notificationStatus: document.getElementById("notificationStatus"),
   notificationSent: document.getElementById("notificationSent"),
   sensorPanel: document.getElementById("sensorPanel"),
@@ -137,6 +155,50 @@ function mean(values) {
 
 function displayLabel(label) {
   return presetTitles[label] || String(label || "").replaceAll("_", " ");
+}
+
+function displayPhaseLabel(label) {
+  if (label === "breathing") return "Respiración normal";
+  if (label === "hold_breath") return "Apnea simulada";
+  if (label === "waiting") return "Preparación";
+  return displayLabel(label);
+}
+
+function formatDurationClock(value) {
+  const seconds = Math.max(0, Math.round(Number(value) || 0));
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return `${minutes}:${String(rest).padStart(2, "0")}`;
+}
+
+function ensureAudio() {
+  if (!state.audioContext) {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return;
+    state.audioContext = new AudioContext();
+  }
+  if (state.audioContext.state === "suspended") state.audioContext.resume();
+}
+
+function phaseAlarm() {
+  if (!els.alarmToggle.checked) return;
+  ensureAudio();
+  const audio = state.audioContext;
+  if (!audio) return;
+  const now = audio.currentTime;
+  [0, 0.18, 0.36].forEach((offset, index) => {
+    const oscillator = audio.createOscillator();
+    const gain = audio.createGain();
+    oscillator.type = "sine";
+    oscillator.frequency.value = index === 1 ? 660 : 880;
+    gain.gain.setValueAtTime(0.0001, now + offset);
+    gain.gain.exponentialRampToValueAtTime(0.16, now + offset + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.14);
+    oscillator.connect(gain);
+    gain.connect(audio.destination);
+    oscillator.start(now + offset);
+    oscillator.stop(now + offset + 0.15);
+  });
 }
 
 function formatSeconds(value) {
@@ -233,11 +295,14 @@ async function postJson(path, payload = {}) {
 
 async function startCollection(label) {
   try {
+    ensureAudio();
+    state.collectionPhaseKey = null;
     applyPresetToForm(label);
     els.collectionStatus.textContent = `Iniciando ${displayLabel(label)}`;
     els.collectionDetail.textContent = "Preparando archivo CSV y metadatos...";
     const result = await postJson("/api/collection/start", buildCollectionPayload(label));
     updateCollection(result.collection);
+    phaseAlarm();
   } catch (error) {
     setCollectionError(error.message);
   }
@@ -256,6 +321,7 @@ async function stopCollection() {
 function updateCollection(collection) {
   if (!collection) return;
   state.collection = collection;
+  renderProtocolClock(collection);
 
   if (collection.presets && !Object.keys(state.presets).length) {
     renderPresetButtons(collection.presets);
@@ -293,6 +359,77 @@ function updateCollection(collection) {
   } else {
     els.collectionDetail.textContent =
       "Primero verifica que la web reciba CSI; luego presiona un estado para guardar una sesión cronometrada.";
+  }
+}
+
+function renderProtocolClock(collection) {
+  if (!collection || !collection.active) {
+    state.collectionPhaseKey = null;
+    els.protocolClock.className = "protocol-clock";
+    els.protocolPhase.textContent = "Sin sesión activa";
+    els.protocolStart.textContent = "--";
+    els.protocolElapsed.textContent = "0:00 / 0:00";
+    els.protocolPhaseRemaining.textContent = "--";
+    els.protocolNext.textContent = "--";
+    els.protocolTimeline.innerHTML = "";
+    els.protocolSchedule.innerHTML = "";
+    els.protocolInstruction.textContent = "Selecciona un protocolo para comenzar.";
+    return;
+  }
+
+  const schedule = collection.schedule || {};
+  const phaseLabel = schedule.phase_label || collection.event_label || collection.label;
+  const className = phaseLabel === "hold_breath" ? "apnea" : phaseLabel === "breathing" ? "breathing" : "";
+  els.protocolClock.className = `protocol-clock ${className}`;
+  els.protocolPhase.textContent = displayPhaseLabel(phaseLabel);
+  els.protocolStart.textContent = formatClock(collection.started_at);
+  els.protocolElapsed.textContent = `${formatDurationClock(collection.elapsed_s)} / ${formatDurationClock(collection.duration_s)}`;
+  const phaseDuration = schedule.phase_end_s === null || schedule.phase_end_s === undefined
+    ? null
+    : Number(schedule.phase_end_s) - Number(schedule.phase_start_s || 0);
+  els.protocolPhaseRemaining.textContent = schedule.phase_remaining_s === null || phaseDuration === null
+    ? "--"
+    : `${formatDurationClock(schedule.phase_elapsed_s)} / ${formatDurationClock(phaseDuration)}`;
+  els.protocolNext.textContent = schedule.next_phase_label
+    ? `${displayPhaseLabel(schedule.next_phase_label)} en ${formatDurationClock(schedule.phase_remaining_s)}`
+    : "Fin del protocolo";
+
+  const events = collection.events && collection.events.length
+    ? collection.events
+    : [{ start_s: 0, end_s: collection.duration_s, label: collection.label }];
+  els.protocolTimeline.innerHTML = events.map((event, index) => {
+    const duration = Math.max(0, Number(event.end_s) - Number(event.start_s));
+    const active = index === Number(schedule.phase_index);
+    const phaseClass = event.label === "hold_breath" ? "apnea" : "";
+    return `<span class="${phaseClass} ${active ? "active" : ""}" style="width:${duration}%;" title="${displayPhaseLabel(event.label)}"></span>`;
+  }).join("");
+  els.protocolSchedule.innerHTML = events.map((event, index) => {
+    const phaseClass = event.label === "hold_breath" ? "apnea" : "";
+    const active = index === Number(schedule.phase_index) ? "active" : "";
+    const start = formatDurationClock(event.start_s);
+    const end = formatDurationClock(event.end_s);
+    const duration = formatDurationClock(Number(event.end_s) - Number(event.start_s));
+    return `<div class="protocol-schedule-row ${phaseClass} ${active}">
+      <span>${start}–${end}</span>
+      <strong>${displayPhaseLabel(event.label)}</strong>
+      <small>${duration}</small>
+    </div>`;
+  }).join("");
+
+  if (phaseLabel === "hold_breath") {
+    els.protocolInstruction.textContent = "Apnea simulada: mantén la pausa indicada y detén la prueba si sientes incomodidad.";
+  } else if (phaseLabel === "breathing") {
+    els.protocolInstruction.textContent = "Respira con normalidad, permanece quieto y espera la próxima alarma.";
+  } else {
+    els.protocolInstruction.textContent = "Preparando el siguiente intervalo.";
+  }
+
+  const phaseKey = `${collection.session_id}:${schedule.phase_index}`;
+  if (state.collectionPhaseKey === null) {
+    state.collectionPhaseKey = phaseKey;
+  } else if (state.collectionPhaseKey !== phaseKey) {
+    state.collectionPhaseKey = phaseKey;
+    phaseAlarm();
   }
 }
 
@@ -355,6 +492,32 @@ function updateInference(inference) {
       ? `${Number(inference.latency_min_s).toFixed(0)}-${Number(inference.latency_max_s).toFixed(0)}s`
       : "--";
   els.inferenceLastRun.textContent = formatClock(inference.last_inference_at);
+
+  if (inference.last_inference_at && inference.last_inference_at !== state.lastInferenceAt) {
+    state.lastInferenceAt = inference.last_inference_at;
+    state.modelHistory.push({
+      probability: inference.apnea_probability,
+      state: inference.state,
+      time: inference.last_inference_at
+    });
+    if (state.modelHistory.length > 120) state.modelHistory.shift();
+  }
+
+  const score = inference.model_score;
+  els.modelDebugDecision.textContent = score === null || score === undefined
+    ? "Esperando inferencia"
+    : `score ${Number(score).toFixed(3)} | umbral 0.000`;
+
+  const features = inference.features || {};
+  const zscores = inference.feature_zscores || {};
+  els.modelFeatures.innerHTML = Object.entries(features)
+    .filter(([name]) => name !== "rpm_estimate")
+    .map(([name, value]) => {
+      const z = zscores[name];
+      const zText = z === undefined ? "" : `z = ${Number(z).toFixed(2)}`;
+      return `<article><span>${name}</span><strong>${Number(value).toFixed(4)}</strong><small>${zText}</small></article>`;
+    })
+    .join("");
 }
 
 function updateNotifications(notifications) {
@@ -512,6 +675,75 @@ function drawAmplitude() {
   data.forEach((value, index) => {
     const x = left + (index / Math.max(1, data.length - 1)) * plotWidth;
     const y = top + (1 - (value - min) / range) * plotHeight;
+    if (index === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+}
+
+function drawModelSignal() {
+  const { ctx, width, height } = canvasSetup(els.modelSignalCanvas);
+  ctx.clearRect(0, 0, width, height);
+  drawAxes(ctx, width, height, "z");
+
+  const data = state.inference?.resp_preview || [];
+  if (!data.length) return;
+
+  const maxAbs = Math.max(1, ...data.map((value) => Math.abs(Number(value) || 0)));
+  const left = 42;
+  const top = 12;
+  const plotWidth = width - 54;
+  const plotHeight = height - 42;
+  const centerY = top + plotHeight / 2;
+
+  ctx.strokeStyle = "#3b3b3b";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(left, centerY);
+  ctx.lineTo(width - 12, centerY);
+  ctx.stroke();
+
+  ctx.strokeStyle = "#65d4d7";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  data.forEach((value, index) => {
+    const x = left + (index / Math.max(1, data.length - 1)) * plotWidth;
+    const y = centerY - (Number(value) / maxAbs) * (plotHeight / 2 - 4);
+    if (index === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+}
+
+function drawModelProbability() {
+  const { ctx, width, height } = canvasSetup(els.modelProbabilityCanvas);
+  ctx.clearRect(0, 0, width, height);
+  drawAxes(ctx, width, height, "prob");
+
+  const left = 42;
+  const top = 12;
+  const plotWidth = width - 54;
+  const plotHeight = height - 42;
+  const thresholdY = top + (1 - 0.5) * plotHeight;
+
+  ctx.setLineDash([6, 5]);
+  ctx.strokeStyle = "#f2bc57";
+  ctx.beginPath();
+  ctx.moveTo(left, thresholdY);
+  ctx.lineTo(width - 12, thresholdY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  const rows = state.modelHistory.filter((row) => row.probability !== null && row.probability !== undefined);
+  if (!rows.length) return;
+
+  ctx.strokeStyle = "#ff6b5f";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  rows.forEach((row, index) => {
+    const x = left + (index / Math.max(1, rows.length - 1)) * plotWidth;
+    const probability = clamp(Number(row.probability) || 0, 0, 1);
+    const y = top + (1 - probability) * plotHeight;
     if (index === 0) ctx.moveTo(x, y);
     else ctx.lineTo(x, y);
   });
@@ -676,6 +908,8 @@ function render(now = 0) {
   if (now - state.lastRender > 80) {
     drawRoom();
     drawAmplitude();
+    drawModelSignal();
+    drawModelProbability();
     drawHeatmap();
     drawRssi();
     state.lastRender = now;
@@ -715,9 +949,19 @@ els.durationInput.addEventListener("input", () => {
 
 els.stopCollectionBtn.addEventListener("click", stopCollection);
 
+els.alarmToggle.addEventListener("change", () => {
+  if (els.alarmToggle.checked) ensureAudio();
+});
+
+window.setInterval(() => {
+  renderProtocolClock(state.collection);
+}, 250);
+
 window.addEventListener("resize", () => {
   drawRoom();
   drawAmplitude();
+  drawModelSignal();
+  drawModelProbability();
   drawHeatmap();
   drawRssi();
 });

@@ -13,9 +13,12 @@
           <h1>ESP CSI Dashboard</h1>
           <p id="subtitle">Esperando datos CSI</p>
         </div>
-        <div class="status" id="status">
-          <span class="dot"></span>
-          <span id="statusText">Desconectado</span>
+        <div class="topbar-actions">
+          <a class="view-link" href="/usuario">Vista de usuario</a>
+          <div class="status" id="status">
+            <span class="dot"></span>
+            <span id="statusText">Desconectado</span>
+          </div>
         </div>
       </header>
 
@@ -102,8 +105,28 @@
                 <strong id="notificationSent">0</strong>
               </article>
             </div>
-            </div>
+          </div>
           </section>
+
+        <section class="panel wide model-debug-panel">
+          <div class="panel-head">
+            <h2>Diagnóstico de la decisión del modelo</h2>
+            <span id="modelDebugDecision">Esperando inferencia</span>
+          </div>
+          <div class="model-debug-grid">
+            <div class="model-debug-block">
+              <h3>Señal respiratoria filtrada</h3>
+              <canvas id="modelSignalCanvas" width="840" height="240"></canvas>
+              <p class="model-debug-note">Señal usada para extraer las características de esta ventana de 20 s.</p>
+            </div>
+            <div class="model-debug-block">
+              <h3>Probabilidad de apnea</h3>
+              <canvas id="modelProbabilityCanvas" width="840" height="240"></canvas>
+              <p class="model-debug-note">La línea punteada representa el umbral de decisión 0.50.</p>
+            </div>
+          </div>
+          <div id="modelFeatures" class="model-feature-grid"></div>
+        </section>
 
         <section class="panel wide sensor-panel" id="sensorPanel">
           <div class="panel-head">
@@ -172,6 +195,39 @@
               </label>
             </div>
             <div class="preset-grid" id="presetButtons"></div>
+            <div class="protocol-clock" id="protocolClock">
+              <div class="protocol-clock-head">
+                <div>
+                  <span class="protocol-kicker">Protocolo guiado</span>
+                  <strong id="protocolPhase">Sin sesión activa</strong>
+                </div>
+                <label class="alarm-toggle">
+                  <input id="alarmToggle" type="checkbox" checked>
+                  <span>Alarmas</span>
+                </label>
+              </div>
+              <div class="protocol-clock-grid">
+                <article>
+                  <span>Inicio</span>
+                  <strong id="protocolStart">--</strong>
+                </article>
+                <article>
+                  <span>Tiempo total</span>
+                  <strong id="protocolElapsed">0:00 / 0:00</strong>
+                </article>
+                <article>
+                  <span>Tiempo de fase</span>
+                  <strong id="protocolPhaseRemaining">--</strong>
+                </article>
+                <article>
+                  <span>Siguiente fase</span>
+                  <strong id="protocolNext">--</strong>
+                </article>
+              </div>
+              <div class="protocol-timeline" id="protocolTimeline"></div>
+              <div class="protocol-schedule" id="protocolSchedule"></div>
+              <p class="protocol-instruction" id="protocolInstruction">Selecciona un protocolo para comenzar.</p>
+            </div>
             <div class="progress-wrap">
               <div class="progress-bar">
                 <span id="collectionProgress"></span>

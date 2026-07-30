@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#fff7f8">
+    <title>Monitor de respiración</title>
+    <link rel="stylesheet" href="/user.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="app-header">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">♥</span>
+          <span>Monitor de respiración</span>
+        </div>
+        <span class="connection" id="connection" role="status">
+          <span class="connection-dot"></span>
+          <span id="connectionText">Conectando</span>
+        </span>
+      </header>
+
+      <section class="hero-card state-warming" id="heroCard" aria-labelledby="statusTitle">
+        <div class="signal-orb" aria-hidden="true">
+          <span class="orb-heart">♥</span>
+        </div>
+        <p class="eyebrow" id="statusEyebrow">MONITOR ACTIVO</p>
+        <h1 id="statusTitle">Preparando lectura</h1>
+        <p class="status-detail" id="statusDetail" aria-live="polite">Estamos recibiendo la señal del monitor.</p>
+        <div class="read-time" id="readTime">Esperando la primera lectura</div>
+      </section>
+
+      <section class="metric-card" aria-label="Respiración detectada">
+        <div class="metric-label">Respiración estimada</div>
+        <div class="metric-value">
+          <strong id="rpmValue">--</strong>
+          <span>RPM</span>
+        </div>
+        <p id="metricDetail">Se mostrará cuando la señal esté lista.</p>
+      </section>
+
+      <section class="action-card normal" id="actionCard" aria-labelledby="actionTitle">
+        <div class="action-icon" id="actionIcon" aria-hidden="true">✓</div>
+        <div>
+          <h2 id="actionTitle">Todo en calma</h2>
+          <p id="actionText">El monitor está analizando el movimiento respiratorio.</p>
+        </div>
+      </section>
+
+      <section class="sensor-card" id="sensorCard" aria-labelledby="sensorTitle">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">SENSORES</p>
+            <h2 id="sensorTitle">Estado del entorno</h2>
+          </div>
+          <span class="sensor-badge" id="sensorBadge">Esperando</span>
+        </div>
+        <div class="sensor-grid">
+          <article>
+            <span>Temperatura</span>
+            <strong id="temperatureValue">--</strong>
+          </article>
+          <article>
+            <span>Sonido</span>
+            <strong id="soundValue">--</strong>
+          </article>
+          <article>
+            <span>Ritmo</span>
+            <strong id="bpmValue">--</strong>
+          </article>
+        </div>
+        <p class="sensor-note" id="sensorNote">Aún no llegan lecturas desde los sensores.</p>
+      </section>
+
+      <aside class="notice">
+        <strong>Prototipo de demostración</strong>
+        <span>Esta pantalla apoya la demostración con el muñeco. No es un dispositivo médico.</span>
+      </aside>
+
+      <footer>
+        <a href="/">Abrir panel técnico</a>
+        <span id="updatedAt">Actualizando…</span>
+      </footer>
+    </main>
+
+    <script src="/user.js"></script>
+  </body>
+</html>

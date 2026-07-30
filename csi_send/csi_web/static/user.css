@@ -1,0 +1,380 @@
+:root {
+  color-scheme: light;
+  --rose-50: #fff7f8;
+  --rose-100: #ffe9ee;
+  --rose-200: #ffd4df;
+  --melon: #ff9aae;
+  --melon-dark: #d95373;
+  --ink: #34242a;
+  --muted: #76656b;
+  --line: #f2dce2;
+  --card: #ffffff;
+  --safe: #356f59;
+  --safe-bg: #eaf6ef;
+  --alert: #b4234c;
+  --alert-bg: #fff0f4;
+  --warning: #8a5b10;
+  --warning-bg: #fff7e7;
+  --shadow: 0 14px 36px rgba(112, 55, 74, 0.10);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background:
+    radial-gradient(circle at 82% -5%, #ffd9e2 0, transparent 32%),
+    var(--rose-50);
+  color: var(--ink);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  margin: 0;
+  min-height: 100vh;
+}
+
+.app-shell {
+  display: grid;
+  gap: 14px;
+  margin: 0 auto;
+  max-width: 560px;
+  min-height: 100vh;
+  padding: max(20px, env(safe-area-inset-top)) 18px max(20px, env(safe-area-inset-bottom));
+}
+
+.app-header,
+.section-heading,
+footer {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.brand {
+  align-items: center;
+  display: flex;
+  font-size: 15px;
+  font-weight: 760;
+  gap: 8px;
+}
+
+.brand-mark {
+  align-items: center;
+  background: var(--melon);
+  border-radius: 50%;
+  color: white;
+  display: inline-flex;
+  font-size: 13px;
+  height: 25px;
+  justify-content: center;
+  width: 25px;
+}
+
+.connection,
+.sensor-badge {
+  align-items: center;
+  background: var(--rose-100);
+  border-radius: 999px;
+  color: var(--muted);
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 700;
+  gap: 6px;
+  padding: 7px 9px;
+}
+
+.connection-dot {
+  background: var(--melon-dark);
+  border-radius: 50%;
+  height: 7px;
+  width: 7px;
+}
+
+.connection.online .connection-dot {
+  background: var(--safe);
+}
+
+.hero-card,
+.metric-card,
+.sensor-card,
+.action-card,
+.notice {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  box-shadow: var(--shadow);
+}
+
+.hero-card {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 26px 22px 24px;
+  position: relative;
+  text-align: center;
+}
+
+.hero-card::before {
+  background: var(--rose-100);
+  border-radius: 50%;
+  content: "";
+  height: 260px;
+  left: 50%;
+  position: absolute;
+  top: -142px;
+  transform: translateX(-50%);
+  width: 260px;
+}
+
+.signal-orb {
+  align-items: center;
+  background: var(--safe-bg);
+  border: 9px solid #d9efe3;
+  border-radius: 50%;
+  color: var(--safe);
+  display: flex;
+  font-size: 38px;
+  height: 105px;
+  justify-content: center;
+  margin-bottom: 16px;
+  position: relative;
+  width: 105px;
+}
+
+.orb-heart {
+  line-height: 1;
+  transform: translateY(2px);
+}
+
+.state-breathing .signal-orb {
+  animation: calmPulse 2s ease-in-out infinite;
+}
+
+.state-apnea .signal-orb {
+  background: var(--alert-bg);
+  border-color: #ffd2df;
+  color: var(--alert);
+}
+
+.state-warming .signal-orb,
+.state-unavailable .signal-orb {
+  background: var(--warning-bg);
+  border-color: #fbe8b9;
+  color: var(--warning);
+}
+
+.eyebrow {
+  color: var(--melon-dark);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  margin: 0 0 5px;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: clamp(27px, 8vw, 35px);
+  letter-spacing: -.04em;
+  line-height: 1.05;
+}
+
+h2 {
+  font-size: 17px;
+  letter-spacing: -.02em;
+}
+
+.status-detail {
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.45;
+  margin-top: 10px;
+  max-width: 360px;
+}
+
+.read-time {
+  background: var(--rose-50);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+  margin-top: 18px;
+  padding: 7px 11px;
+}
+
+.metric-card,
+.sensor-card {
+  padding: 19px 20px;
+}
+
+.metric-label,
+.sensor-grid span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.metric-value {
+  align-items: baseline;
+  display: flex;
+  gap: 8px;
+  margin: 7px 0 4px;
+}
+
+.metric-value strong {
+  font-size: 39px;
+  letter-spacing: -.055em;
+  line-height: 1;
+}
+
+.metric-value span {
+  color: var(--melon-dark);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.metric-card p,
+.sensor-note {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.action-card {
+  align-items: flex-start;
+  display: flex;
+  gap: 13px;
+  padding: 17px;
+}
+
+.action-icon {
+  align-items: center;
+  background: var(--safe-bg);
+  border-radius: 50%;
+  color: var(--safe);
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 17px;
+  font-weight: 900;
+  height: 30px;
+  justify-content: center;
+  width: 30px;
+}
+
+.action-card h2 {
+  margin: 1px 0 4px;
+}
+
+.action-card p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.action-card.alert {
+  background: var(--alert-bg);
+  border-color: #ffc5d5;
+}
+
+.action-card.alert .action-icon {
+  background: #ffd6e1;
+  color: var(--alert);
+}
+
+.action-card.warning {
+  background: var(--warning-bg);
+  border-color: #f9dd9d;
+}
+
+.action-card.warning .action-icon {
+  background: #ffedc7;
+  color: var(--warning);
+}
+
+.sensor-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 17px 0 14px;
+}
+
+.sensor-grid article {
+  background: var(--rose-50);
+  border-radius: 15px;
+  min-width: 0;
+  padding: 12px 9px;
+}
+
+.sensor-grid strong {
+  display: block;
+  font-size: 15px;
+  margin-top: 5px;
+  overflow-wrap: anywhere;
+}
+
+.sensor-badge.ok {
+  background: var(--safe-bg);
+  color: var(--safe);
+}
+
+.sensor-badge.alert {
+  background: var(--alert-bg);
+  color: var(--alert);
+}
+
+.notice {
+  background: #fffafb;
+  box-shadow: none;
+  color: var(--muted);
+  display: grid;
+  font-size: 12px;
+  gap: 3px;
+  line-height: 1.4;
+  padding: 15px 17px;
+}
+
+.notice strong {
+  color: var(--ink);
+}
+
+footer {
+  color: var(--muted);
+  font-size: 12px;
+  padding: 1px 2px;
+}
+
+footer a {
+  color: var(--melon-dark);
+  font-weight: 750;
+  text-decoration: none;
+}
+
+@keyframes calmPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.055); }
+}
+
+@media (max-width: 360px) {
+  .app-shell {
+    padding-left: 13px;
+    padding-right: 13px;
+  }
+
+  .brand {
+    font-size: 13px;
+  }
+
+  .connection {
+    font-size: 11px;
+  }
+}
+
+@media (min-width: 561px) {
+  .app-shell {
+    padding-top: 34px;
+  }
+}

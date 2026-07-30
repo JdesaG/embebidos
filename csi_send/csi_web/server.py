@@ -106,20 +106,17 @@ COLLECTION_PRESETS = {
         "environment": "off",
     },
     "hold_breath_off": {
-        "description": "Respiracion normal y apnea simulada por ciclos.",
-        "duration_s": 240,
+        "description": "Muñeco respirando y detenido por ciclos balanceados de 60 s.",
+        "duration_s": 360,
         "person_position": "between_tx_rx",
         "environment": "off",
         "events": [
-            {"start_s": 0, "end_s": 30, "label": "breathing"},
-            {"start_s": 30, "end_s": 50, "label": "hold_breath"},
-            {"start_s": 50, "end_s": 80, "label": "breathing"},
-            {"start_s": 80, "end_s": 100, "label": "hold_breath"},
-            {"start_s": 100, "end_s": 130, "label": "breathing"},
-            {"start_s": 130, "end_s": 150, "label": "hold_breath"},
-            {"start_s": 150, "end_s": 180, "label": "breathing"},
-            {"start_s": 180, "end_s": 200, "label": "hold_breath"},
-            {"start_s": 200, "end_s": 240, "label": "breathing"},
+            {"start_s": 0, "end_s": 60, "label": "breathing"},
+            {"start_s": 60, "end_s": 120, "label": "hold_breath"},
+            {"start_s": 120, "end_s": 180, "label": "breathing"},
+            {"start_s": 180, "end_s": 240, "label": "hold_breath"},
+            {"start_s": 240, "end_s": 300, "label": "breathing"},
+            {"start_s": 300, "end_s": 360, "label": "hold_breath"},
         ],
     },
     "walking_between_off": {
@@ -188,7 +185,7 @@ MODEL_FEATURES = [
     "peak_power",
 ]
 
-DEFAULT_MODEL_PATH = "/Users/jandonyggarofalo/Downloads/Apnea Model.joblib"
+DEFAULT_MODEL_PATH = str(Path(__file__).resolve().parents[1] / "models" / "apnea_model_july_2026.joblib")
 DEFAULT_TELEGRAM_ALERT_MESSAGE = "\U0001f6a8 \u26a0\ufe0f ALERTA DE AHOGO: posible apnea detectada."
 LOCAL_ENV_FILENAME = ".env.local"
 DEFAULT_LOG_DIRNAME = "logs"
@@ -351,6 +348,67 @@ def event_label_at(elapsed_s, label, events):
     return label
 
 
+def schedule_state_at(elapsed_s, label, events):
+    """Return the active protocol phase and the next scheduled transition."""
+    elapsed_s = max(0.0, float(elapsed_s))
+    if not events:
+        return {
+            "phase_index": 0,
+            "phase_count": 1,
+            "phase_label": label,
+            "phase_start_s": 0.0,
+            "phase_end_s": None,
+            "phase_elapsed_s": elapsed_s,
+            "phase_remaining_s": None,
+            "next_phase_label": None,
+            "next_phase_start_s": None,
+        }
+
+    for index, event in enumerate(events):
+        start_s = float(event["start_s"])
+        end_s = float(event["end_s"])
+        if start_s <= elapsed_s < end_s:
+            next_event = events[index + 1] if index + 1 < len(events) else None
+            return {
+                "phase_index": index,
+                "phase_count": len(events),
+                "phase_label": event["label"],
+                "phase_start_s": start_s,
+                "phase_end_s": end_s,
+                "phase_elapsed_s": max(0.0, elapsed_s - start_s),
+                "phase_remaining_s": max(0.0, end_s - elapsed_s),
+                "next_phase_label": next_event["label"] if next_event else None,
+                "next_phase_start_s": float(next_event["start_s"]) if next_event else None,
+            }
+
+    if elapsed_s < float(events[0]["start_s"]):
+        event = events[0]
+        return {
+            "phase_index": -1,
+            "phase_count": len(events),
+            "phase_label": "waiting",
+            "phase_start_s": 0.0,
+            "phase_end_s": float(event["start_s"]),
+            "phase_elapsed_s": elapsed_s,
+            "phase_remaining_s": max(0.0, float(event["start_s"]) - elapsed_s),
+            "next_phase_label": event["label"],
+            "next_phase_start_s": float(event["start_s"]),
+        }
+
+    last = events[-1]
+    return {
+        "phase_index": len(events) - 1,
+        "phase_count": len(events),
+        "phase_label": last["label"],
+        "phase_start_s": float(last["start_s"]),
+        "phase_end_s": float(last["end_s"]),
+        "phase_elapsed_s": max(0.0, float(last["end_s"]) - float(last["start_s"])),
+        "phase_remaining_s": 0.0,
+        "next_phase_label": None,
+        "next_phase_start_s": None,
+    }
+
+
 class RealtimeApneaInference:
     def __init__(
         self,
@@ -401,9 +459,12 @@ class RealtimeApneaInference:
             "rpm_estimate": None,
             "apnea_probability": None,
             "confidence": None,
+            "model_score": None,
             "apnea_duration_s": 0,
             "pc1_var_explained": None,
             "features": {},
+            "feature_zscores": {},
+            "resp_preview": [],
             "last_error": "",
         }
         self._load_model()
@@ -622,13 +683,20 @@ class RealtimeApneaInference:
         )
         resp = self.filtfilt(b, a, pc1)
         features = self._extract_features(resp)
-        row = [[float(features[name]) for name in self.features]]
+        raw_row = [[float(features[name]) for name in self.features]]
+        feature_zscores = {}
+        row = raw_row
         if self.scaler is not None:
             row = self.scaler.transform(row)
+            feature_zscores = {
+                name: float(value)
+                for name, value in zip(self.features, row[0])
+            }
 
         prediction = int(self.model.predict(row)[0])
         apnea_probability = None
         confidence = None
+        model_score = None
         if hasattr(self.model, "predict_proba"):
             proba = self.model.predict_proba(row)[0]
             classes = list(getattr(self.model, "classes_", [0, 1]))
@@ -639,8 +707,20 @@ class RealtimeApneaInference:
             confidence = float(max(proba))
         elif hasattr(self.model, "decision_function"):
             score = float(self.model.decision_function(row)[0])
+            model_score = score
             apnea_probability = float(1.0 / (1.0 + math.exp(-score)))
             confidence = max(apnea_probability, 1.0 - apnea_probability)
+
+        if hasattr(self.model, "decision_function") and model_score is None:
+            model_score = float(self.model.decision_function(row)[0])
+
+        preview_step = max(1, len(resp) // 160)
+        resp_center = float(resp.mean())
+        resp_scale = max(float(resp.std()), 1e-9)
+        resp_preview = [
+            round(float((value - resp_center) / resp_scale), 4)
+            for value in resp[::preview_step]
+        ]
 
         state = "apnea" if prediction == 1 else "breathing"
         if state == "apnea":
@@ -670,9 +750,12 @@ class RealtimeApneaInference:
             "rpm_estimate": round(float(features["rpm_estimate"]), 2),
             "apnea_probability": round(apnea_probability, 4) if apnea_probability is not None else None,
             "confidence": round(confidence, 4) if confidence is not None else None,
+            "model_score": round(model_score, 4) if model_score is not None else None,
             "apnea_duration_s": round(apnea_duration, 1),
             "pc1_var_explained": round(pc1_var, 4),
             "features": {key: round(float(value), 6) for key, value in features.items()},
+            "feature_zscores": {key: round(float(value), 4) for key, value in feature_zscores.items()},
+            "resp_preview": resp_preview,
             "last_error": "",
         }
 
@@ -1035,11 +1118,14 @@ class CsiRecorder:
             "active": True,
             "session_id": self.session["session_id"],
             "label": self.session["label"],
+            "started_at": self.session["started_at"],
             "event_label": event_label_at(elapsed_s, self.session["label"], self.session["events"]),
             "elapsed_s": round(elapsed_s, 3),
             "duration_s": duration_s,
             "remaining_s": round(remaining_s, 3),
             "progress": min(1.0, elapsed_s / duration_s) if duration_s else 0.0,
+            "events": self.session["events"],
+            "schedule": schedule_state_at(elapsed_s, self.session["label"], self.session["events"]),
             "samples_collected": self.sample_index,
             "corrupt_lines": self.corrupt_lines,
             "raw_file": self.session["raw_file"],
@@ -1505,6 +1591,9 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         if self.path == "/api/collection/presets":
             self.send_json({"presets": COLLECTION_PRESETS})
             return
+
+        if self.path in {"/usuario", "/familia"}:
+            self.path = "/user.html"
 
         if self.path == "/":
             self.path = "/index.html"
