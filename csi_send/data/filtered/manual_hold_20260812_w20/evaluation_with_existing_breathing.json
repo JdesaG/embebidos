@@ -1,0 +1,655 @@
+{
+  "generated_at": "2026-08-12T18:57:48+00:00",
+  "manifests": [
+    "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/filtered/manual_hold_20260812_w20/window_manifest.csv",
+    "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/filtered/breathing_baseline_20260812_w20/window_manifest.csv"
+  ],
+  "validation": "LeaveOneGroupOut with complete source sessions held out",
+  "evaluations": {
+    "quality_only": {
+      "log_features_absolute": {
+        "windows": 193,
+        "breathing_windows": 139,
+        "hold_windows": 54,
+        "sessions": 18,
+        "accuracy": 0.6166,
+        "balanced_accuracy": 0.5866,
+        "hold_precision": 0.3684,
+        "hold_recall": 0.5185,
+        "confusion_matrix_rows_actual_columns_predicted": [
+          [
+            91,
+            48
+          ],
+          [
+            26,
+            28
+          ]
+        ],
+        "per_session": [
+          {
+            "session_id": "session_20260812_092121_breathing_off_breathing_off",
+            "windows": 10,
+            "actual_hold": 0,
+            "predicted_hold": 10,
+            "accuracy": 0.0,
+            "balanced_accuracy": null
+          },
+          {
+            "session_id": "session_20260812_092928_breathing_off_breathing_off",
+            "windows": 14,
+            "actual_hold": 0,
+            "predicted_hold": 6,
+            "accuracy": 0.5714,
+            "balanced_accuracy": null
+          },
+          {
+            "session_id": "session_20260812_093242_breathing_off_breathing_off",
+            "windows": 20,
+            "actual_hold": 0,
+            "predicted_hold": 7,
+            "accuracy": 0.65,
+            "balanced_accuracy": null
+          },
+          {
+            "session_id": "session_20260812_093811_breathing_off_breathing_off",
+            "windows": 8,
+            "actual_hold": 0,
+            "predicted_hold": 4,
+            "accuracy": 0.5,
+            "balanced_accuracy": null
+          },
+          {
+            "session_id": "session_20260812_094151_breathing_off_breathing_off",
+            "windows": 18,
+            "actual_hold": 0,
+            "predicted_hold": 4,
+            "accuracy": 0.7778,
+            "balanced_accuracy": null
+          },
+          {
+            "session_id": "session_20260812_094454_breathing_off_breathing_off",
+            "windows": 15,
+            "actual_hold": 0,
+            "predicted_hold": 5,
+            "accuracy": 0.6667,
+            "balanced_accuracy": null
+          },
+          {
+            "session_id": "session_20260812_094809_breathing_off_breathing_off",
+            "windows": 11,
+            "actual_hold": 0,
+            "predicted_hold": 0,
+            "accuracy": 1.0,
+            "balanced_accuracy": null
+          },
+          {
+            "session_id": "session_20260812_131332_hold_breath_off_hold_breath_off",
+            "windows": 5,
+            "actual_hold": 3,
+            "predicted_hold": 3,
+            "accuracy": 0.6,
+            "balanced_accuracy": 0.5833
+          },
+          {
+            "session_id": "session_20260812_131528_hold_breath_off_hold_breath_off",
+            "windows": 5,
+            "actual_hold": 1,
+            "predicted_hold": 5,
+            "accuracy": 0.2,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "session_id": "session_20260812_131729_hold_breath_off_hold_breath_off",
+            "windows": 7,
+            "actual_hold": 2,
+            "predicted_hold": 1,
+            "accuracy": 0.5714,
+            "balanced_accuracy": 0.4
+          },
+          {
+            "session_id": "session_20260812_132120_hold_breath_off_hold_breath_off",
+            "windows": 13,
+            "actual_hold": 7,
+            "predicted_hold": 1,
+            "accuracy": 0.5385,
+            "balanced_accuracy": 0.5714
+          },
+          {
+            "session_id": "session_20260812_132357_hold_breath_off_hold_breath_off",
+            "windows": 12,
+            "actual_hold": 6,
+            "predicted_hold": 4,
+            "accuracy": 0.8333,
+            "balanced_accuracy": 0.8333
+          },
+          {
+            "session_id": "session_20260812_132610_hold_breath_off_hold_breath_off",
+            "windows": 5,
+            "actual_hold": 2,
+            "predicted_hold": 2,
+            "accuracy": 0.2,
+            "balanced_accuracy": 0.1667
+          },
+          {
+            "session_id": "session_20260812_133128_hold_breath_off_hold_breath_off",
+            "windows": 7,
+            "actual_hold": 7,
+            "predicted_hold": 4,
+            "accuracy": 0.5714,
+            "balanced_accuracy": null
+          },
+          {
+            "session_id": "session_20260812_133631_hold_breath_off_hold_breath_off",
+            "windows": 20,
+            "actual_hold": 14,
+            "predicted_hold": 7,
+            "accuracy": 0.45,
+            "balanced_accuracy": 0.5119
+          },
+          {
+            "session_id": "session_20260812_133911_hold_breath_off_hold_breath_off",
+            "windows": 7,
+            "actual_hold": 2,
+            "predicted_hold": 2,
+            "accuracy": 1.0,
+            "balanced_accuracy": 1.0
+          },
+          {
+            "session_id": "session_20260812_134202_hold_breath_off_hold_breath_off",
+            "windows": 10,
+            "actual_hold": 4,
+            "predicted_hold": 5,
+            "accuracy": 0.7,
+            "balanced_accuracy": 0.7083
+          },
+          {
+            "session_id": "session_20260812_134404_hold_breath_off_hold_breath_off",
+            "windows": 6,
+            "actual_hold": 6,
+            "predicted_hold": 6,
+            "accuracy": 1.0,
+            "balanced_accuracy": null
+          }
+        ],
+        "roc_auc": 0.5913
+      },
+      "log_features_baseline_relative": {
+        "windows": 193,
+        "breathing_windows": 139,
+        "hold_windows": 54,
+        "sessions": 18,
+        "accuracy": 0.7461,
+        "balanced_accuracy": 0.6878,
+        "hold_precision": 0.5455,
+        "hold_recall": 0.5556,
+        "confusion_matrix_rows_actual_columns_predicted": [
+          [
+            114,
+            25
+          ],
+          [
+            24,
+            30
+          ]
+        ],
+        "per_session": [
+          {
+            "session_id": "session_20260812_092121_breathing_off_breathing_off",
+            "windows": 10,
+            "actual_hold": 0,
+            "predicted_hold": 1,
+            "accuracy": 0.9,
+            "balanced_accuracy": null
+          },
+          {
+            "session_id": "session_20260812_092928_breathing_off_breathing_off",
+            "windows": 14,
+            "actual_hold": 0,
+            "predicted_hold": 3,
+            "accuracy": 0.7857,
+            "balanced_accuracy": null
+          },
+          {
+            "session_id": "session_20260812_093242_breathing_off_breathing_off",
+            "windows": 20,
+            "actual_hold": 0,
+            "predicted_hold": 3,
+            "accuracy": 0.85,
+            "balanced_accuracy": null
+          },
+          {
+            "session_id": "session_20260812_093811_breathing_off_breathing_off",
+            "windows": 8,
+            "actual_hold": 0,
+            "predicted_hold": 3,
+            "accuracy": 0.625,
+            "balanced_accuracy": null
+          },
+          {
+            "session_id": "session_20260812_094151_breathing_off_breathing_off",
+            "windows": 18,
+            "actual_hold": 0,
+            "predicted_hold": 2,
+            "accuracy": 0.8889,
+            "balanced_accuracy": null
+          },
+          {
+            "session_id": "session_20260812_094454_breathing_off_breathing_off",
+            "windows": 15,
+            "actual_hold": 0,
+            "predicted_hold": 4,
+            "accuracy": 0.7333,
+            "balanced_accuracy": null
+          },
+          {
+            "session_id": "session_20260812_094809_breathing_off_breathing_off",
+            "windows": 11,
+            "actual_hold": 0,
+            "predicted_hold": 3,
+            "accuracy": 0.7273,
+            "balanced_accuracy": null
+          },
+          {
+            "session_id": "session_20260812_131332_hold_breath_off_hold_breath_off",
+            "windows": 5,
+            "actual_hold": 3,
+            "predicted_hold": 2,
+            "accuracy": 0.8,
+            "balanced_accuracy": 0.8333
+          },
+          {
+            "session_id": "session_20260812_131528_hold_breath_off_hold_breath_off",
+            "windows": 5,
+            "actual_hold": 1,
+            "predicted_hold": 3,
+            "accuracy": 0.6,
+            "balanced_accuracy": 0.75
+          },
+          {
+            "session_id": "session_20260812_131729_hold_breath_off_hold_breath_off",
+            "windows": 7,
+            "actual_hold": 2,
+            "predicted_hold": 4,
+            "accuracy": 0.7143,
+            "balanced_accuracy": 0.8
+          },
+          {
+            "session_id": "session_20260812_132120_hold_breath_off_hold_breath_off",
+            "windows": 13,
+            "actual_hold": 7,
+            "predicted_hold": 4,
+            "accuracy": 0.6154,
+            "balanced_accuracy": 0.631
+          },
+          {
+            "session_id": "session_20260812_132357_hold_breath_off_hold_breath_off",
+            "windows": 12,
+            "actual_hold": 6,
+            "predicted_hold": 4,
+            "accuracy": 0.8333,
+            "balanced_accuracy": 0.8333
+          },
+          {
+            "session_id": "session_20260812_132610_hold_breath_off_hold_breath_off",
+            "windows": 5,
+            "actual_hold": 2,
+            "predicted_hold": 0,
+            "accuracy": 0.6,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "session_id": "session_20260812_133128_hold_breath_off_hold_breath_off",
+            "windows": 7,
+            "actual_hold": 7,
+            "predicted_hold": 7,
+            "accuracy": 1.0,
+            "balanced_accuracy": null
+          },
+          {
+            "session_id": "session_20260812_133631_hold_breath_off_hold_breath_off",
+            "windows": 20,
+            "actual_hold": 14,
+            "predicted_hold": 0,
+            "accuracy": 0.3,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "session_id": "session_20260812_133911_hold_breath_off_hold_breath_off",
+            "windows": 7,
+            "actual_hold": 2,
+            "predicted_hold": 2,
+            "accuracy": 1.0,
+            "balanced_accuracy": 1.0
+          },
+          {
+            "session_id": "session_20260812_134202_hold_breath_off_hold_breath_off",
+            "windows": 10,
+            "actual_hold": 4,
+            "predicted_hold": 4,
+            "accuracy": 0.8,
+            "balanced_accuracy": 0.7917
+          },
+          {
+            "session_id": "session_20260812_134404_hold_breath_off_hold_breath_off",
+            "windows": 6,
+            "actual_hold": 6,
+            "predicted_hold": 6,
+            "accuracy": 1.0,
+            "balanced_accuracy": null
+          }
+        ],
+        "roc_auc": 0.7314
+      }
+    },
+    "high_confidence": {
+      "log_features_absolute": {
+        "windows": 146,
+        "breathing_windows": 139,
+        "hold_windows": 7,
+        "sessions": 16,
+        "accuracy": 0.6096,
+        "balanced_accuracy": 0.4558,
+        "hold_precision": 0.037,
+        "hold_recall": 0.2857,
+        "confusion_matrix_rows_actual_columns_predicted": [
+          [
+            87,
+            52
+          ],
+          [
+            5,
+            2
+          ]
+        ],
+        "per_session": [
+          {
+            "session_id": "session_20260812_092121_breathing_off_breathing_off",
+            "windows": 10,
+            "actual_hold": 0,
+            "predicted_hold": 0,
+            "accuracy": 1.0,
+            "balanced_accuracy": null
+          },
+          {
+            "session_id": "session_20260812_092928_breathing_off_breathing_off",
+            "windows": 14,
+            "actual_hold": 0,
+            "predicted_hold": 10,
+            "accuracy": 0.2857,
+            "balanced_accuracy": null
+          },
+          {
+            "session_id": "session_20260812_093242_breathing_off_breathing_off",
+            "windows": 20,
+            "actual_hold": 0,
+            "predicted_hold": 8,
+            "accuracy": 0.6,
+            "balanced_accuracy": null
+          },
+          {
+            "session_id": "session_20260812_093811_breathing_off_breathing_off",
+            "windows": 8,
+            "actual_hold": 0,
+            "predicted_hold": 3,
+            "accuracy": 0.625,
+            "balanced_accuracy": null
+          },
+          {
+            "session_id": "session_20260812_094151_breathing_off_breathing_off",
+            "windows": 18,
+            "actual_hold": 0,
+            "predicted_hold": 9,
+            "accuracy": 0.5,
+            "balanced_accuracy": null
+          },
+          {
+            "session_id": "session_20260812_094454_breathing_off_breathing_off",
+            "windows": 15,
+            "actual_hold": 0,
+            "predicted_hold": 3,
+            "accuracy": 0.8,
+            "balanced_accuracy": null
+          },
+          {
+            "session_id": "session_20260812_094809_breathing_off_breathing_off",
+            "windows": 11,
+            "actual_hold": 0,
+            "predicted_hold": 9,
+            "accuracy": 0.1818,
+            "balanced_accuracy": null
+          },
+          {
+            "session_id": "session_20260812_131332_hold_breath_off_hold_breath_off",
+            "windows": 2,
+            "actual_hold": 0,
+            "predicted_hold": 1,
+            "accuracy": 0.5,
+            "balanced_accuracy": null
+          },
+          {
+            "session_id": "session_20260812_131528_hold_breath_off_hold_breath_off",
+            "windows": 4,
+            "actual_hold": 0,
+            "predicted_hold": 0,
+            "accuracy": 1.0,
+            "balanced_accuracy": null
+          },
+          {
+            "session_id": "session_20260812_131729_hold_breath_off_hold_breath_off",
+            "windows": 6,
+            "actual_hold": 1,
+            "predicted_hold": 2,
+            "accuracy": 0.8333,
+            "balanced_accuracy": 0.9
+          },
+          {
+            "session_id": "session_20260812_132120_hold_breath_off_hold_breath_off",
+            "windows": 6,
+            "actual_hold": 0,
+            "predicted_hold": 2,
+            "accuracy": 0.6667,
+            "balanced_accuracy": null
+          },
+          {
+            "session_id": "session_20260812_132357_hold_breath_off_hold_breath_off",
+            "windows": 6,
+            "actual_hold": 0,
+            "predicted_hold": 0,
+            "accuracy": 1.0,
+            "balanced_accuracy": null
+          },
+          {
+            "session_id": "session_20260812_132610_hold_breath_off_hold_breath_off",
+            "windows": 3,
+            "actual_hold": 0,
+            "predicted_hold": 1,
+            "accuracy": 0.6667,
+            "balanced_accuracy": null
+          },
+          {
+            "session_id": "session_20260812_133631_hold_breath_off_hold_breath_off",
+            "windows": 12,
+            "actual_hold": 6,
+            "predicted_hold": 1,
+            "accuracy": 0.5833,
+            "balanced_accuracy": 0.5833
+          },
+          {
+            "session_id": "session_20260812_133911_hold_breath_off_hold_breath_off",
+            "windows": 5,
+            "actual_hold": 0,
+            "predicted_hold": 2,
+            "accuracy": 0.6,
+            "balanced_accuracy": null
+          },
+          {
+            "session_id": "session_20260812_134202_hold_breath_off_hold_breath_off",
+            "windows": 6,
+            "actual_hold": 0,
+            "predicted_hold": 3,
+            "accuracy": 0.5,
+            "balanced_accuracy": null
+          }
+        ],
+        "roc_auc": 0.409
+      },
+      "log_features_baseline_relative": {
+        "windows": 146,
+        "breathing_windows": 139,
+        "hold_windows": 7,
+        "sessions": 16,
+        "accuracy": 0.7945,
+        "balanced_accuracy": 0.4851,
+        "hold_precision": 0.04,
+        "hold_recall": 0.1429,
+        "confusion_matrix_rows_actual_columns_predicted": [
+          [
+            115,
+            24
+          ],
+          [
+            6,
+            1
+          ]
+        ],
+        "per_session": [
+          {
+            "session_id": "session_20260812_092121_breathing_off_breathing_off",
+            "windows": 10,
+            "actual_hold": 0,
+            "predicted_hold": 1,
+            "accuracy": 0.9,
+            "balanced_accuracy": null
+          },
+          {
+            "session_id": "session_20260812_092928_breathing_off_breathing_off",
+            "windows": 14,
+            "actual_hold": 0,
+            "predicted_hold": 1,
+            "accuracy": 0.9286,
+            "balanced_accuracy": null
+          },
+          {
+            "session_id": "session_20260812_093242_breathing_off_breathing_off",
+            "windows": 20,
+            "actual_hold": 0,
+            "predicted_hold": 3,
+            "accuracy": 0.85,
+            "balanced_accuracy": null
+          },
+          {
+            "session_id": "session_20260812_093811_breathing_off_breathing_off",
+            "windows": 8,
+            "actual_hold": 0,
+            "predicted_hold": 1,
+            "accuracy": 0.875,
+            "balanced_accuracy": null
+          },
+          {
+            "session_id": "session_20260812_094151_breathing_off_breathing_off",
+            "windows": 18,
+            "actual_hold": 0,
+            "predicted_hold": 3,
+            "accuracy": 0.8333,
+            "balanced_accuracy": null
+          },
+          {
+            "session_id": "session_20260812_094454_breathing_off_breathing_off",
+            "windows": 15,
+            "actual_hold": 0,
+            "predicted_hold": 5,
+            "accuracy": 0.6667,
+            "balanced_accuracy": null
+          },
+          {
+            "session_id": "session_20260812_094809_breathing_off_breathing_off",
+            "windows": 11,
+            "actual_hold": 0,
+            "predicted_hold": 2,
+            "accuracy": 0.8182,
+            "balanced_accuracy": null
+          },
+          {
+            "session_id": "session_20260812_131332_hold_breath_off_hold_breath_off",
+            "windows": 2,
+            "actual_hold": 0,
+            "predicted_hold": 0,
+            "accuracy": 1.0,
+            "balanced_accuracy": null
+          },
+          {
+            "session_id": "session_20260812_131528_hold_breath_off_hold_breath_off",
+            "windows": 4,
+            "actual_hold": 0,
+            "predicted_hold": 2,
+            "accuracy": 0.5,
+            "balanced_accuracy": null
+          },
+          {
+            "session_id": "session_20260812_131729_hold_breath_off_hold_breath_off",
+            "windows": 6,
+            "actual_hold": 1,
+            "predicted_hold": 0,
+            "accuracy": 0.8333,
+            "balanced_accuracy": 0.5
+          },
+          {
+            "session_id": "session_20260812_132120_hold_breath_off_hold_breath_off",
+            "windows": 6,
+            "actual_hold": 0,
+            "predicted_hold": 0,
+            "accuracy": 1.0,
+            "balanced_accuracy": null
+          },
+          {
+            "session_id": "session_20260812_132357_hold_breath_off_hold_breath_off",
+            "windows": 6,
+            "actual_hold": 0,
+            "predicted_hold": 1,
+            "accuracy": 0.8333,
+            "balanced_accuracy": null
+          },
+          {
+            "session_id": "session_20260812_132610_hold_breath_off_hold_breath_off",
+            "windows": 3,
+            "actual_hold": 0,
+            "predicted_hold": 1,
+            "accuracy": 0.6667,
+            "balanced_accuracy": null
+          },
+          {
+            "session_id": "session_20260812_133631_hold_breath_off_hold_breath_off",
+            "windows": 12,
+            "actual_hold": 6,
+            "predicted_hold": 1,
+            "accuracy": 0.5833,
+            "balanced_accuracy": 0.5833
+          },
+          {
+            "session_id": "session_20260812_133911_hold_breath_off_hold_breath_off",
+            "windows": 5,
+            "actual_hold": 0,
+            "predicted_hold": 2,
+            "accuracy": 0.6,
+            "balanced_accuracy": null
+          },
+          {
+            "session_id": "session_20260812_134202_hold_breath_off_hold_breath_off",
+            "windows": 6,
+            "actual_hold": 0,
+            "predicted_hold": 2,
+            "accuracy": 0.6667,
+            "balanced_accuracy": null
+          }
+        ],
+        "roc_auc": 0.5735
+      }
+    }
+  },
+  "interpretation_limits": [
+    "quality_only uses scheduled labels that may contain unrecorded breathing during a hold",
+    "high_confidence excludes hold windows using respiratory activity and is therefore not an independent clinical performance estimate",
+    "baseline_relative assumes a short known-normal calibration at the start of each deployment session"
+  ]
+}

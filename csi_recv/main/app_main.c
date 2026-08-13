@@ -10,23 +10,25 @@
 
 #include "nvs_flash.h"
 
-#include "esp_event.h"
 #include "esp_log.h"
-#include "esp_netif.h"
 #include "esp_now.h"
+#include "esp_timer.h"
 #include "esp_wifi.h"
 #include "esp_csi_gain_ctrl.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 #include "freertos/queue.h"
+#include "freertos/semphr.h"
 #include "freertos/task.h"
 
 #include "lwip/inet.h"
 #include "lwip/netdb.h"
 #include "lwip/sockets.h"
 
+#include "device_protocol.h"
 #include "sensor_payload.h"
+#include "wifi_manager.h"
 
 /*
  * Receptor CSI:
@@ -35,18 +37,22 @@
  * La salida de datos ya no se imprime por serial. El puerto USB se conserva
  * únicamente para logs, flasheo y depuración.
  *
- * Configure SSID, password, host y puerto UDP con `idf.py menuconfig` en la sección
- * "CSI Receiver Network". No guardar la contraseña en el repositorio.
+ * El gateway configura hasta dos redes desde su portal local y descubre el
+ * servidor automáticamente por UDP; no hay IP ni contraseña fija en firmware.
  */
 
 #define CSI_WIRE_MAGIC 0x48495343u /* bytes: "CSIH" en little-endian */
 #define CSI_WIRE_VERSION 1u
 #define CSI_WIRE_FRAME_CSI 1u
 #define CSI_WIRE_FRAME_SENSOR 2u
+#define CSI_WIRE_FRAME_ACTUATOR 3u
 #define CSI_WIRE_FRAME_FLAGS 0u
 #define CSI_DATA_MAX_LEN 512
 #define SENSOR_PAYLOAD_OFFSET 15
 #define CSI_UDP_MAX_DATAGRAM_SIZE 1200
+#define CSI_DISCOVERY_PORT 5001
+#define CSI_COMMAND_PORT 5002
+#define SERVER_FOUND_BIT BIT0
 
 #if CONFIG_IDF_TARGET_ESP32C5 || CONFIG_IDF_TARGET_ESP32C61 || \
     (CONFIG_IDF_TARGET_ESP32C6 && ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 4, 0))
@@ -82,10 +88,21 @@ static const uint8_t CONFIG_CSI_SEND_MAC[] = {
     0x1a, 0x00, 0x00, 0x00, 0x00, 0x00};
 
 static const char *TAG = "csi_recv";
-static EventGroupHandle_t s_wifi_event_group;
+static EventGroupHandle_t s_network_events;
 static QueueHandle_t s_transport_queue;
-static const EventBits_t WIFI_GOT_IP_BIT = BIT0;
+static SemaphoreHandle_t s_server_mutex;
 static uint8_t s_wifi_channel;
+static struct sockaddr_in s_server_destination;
+static uint8_t s_broadcast_peer[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+static volatile uint32_t s_pair_hello_count;
+static volatile uint32_t s_csi_rx_count;
+static volatile uint32_t s_sensor_rx_count;
+static volatile uint32_t s_actuator_rx_count;
+static volatile uint32_t s_queue_drop_count;
+static volatile uint32_t s_udp_sent_count;
+static volatile uint32_t s_udp_error_count;
+static volatile uint32_t s_discovery_sent_count;
+static volatile uint32_t s_discovery_reply_count;
 
 typedef struct {
     uint8_t type;
@@ -102,6 +119,7 @@ typedef struct {
     uint8_t mac[6];
     int16_t csi[CSI_DATA_MAX_LEN];
     sensor_payload_t sensor;
+    device_message_t device;
 } transport_frame_t;
 
 /* Wire format is packed and little-endian, matching the ESP32 and Python host. */
@@ -132,111 +150,6 @@ typedef struct __attribute__((packed)) {
     uint8_t mac[6];
 } wire_csi_body_t;
 
-static void wifi_event_handler(void *arg, esp_event_base_t event_base,
-                               int32_t event_id, void *event_data)
-{
-    (void)arg;
-    (void)event_data;
-
-    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
-        esp_wifi_connect();
-    } else if (event_base == WIFI_EVENT &&
-               event_id == WIFI_EVENT_STA_DISCONNECTED) {
-        xEventGroupClearBits(s_wifi_event_group, WIFI_GOT_IP_BIT);
-        ESP_LOGW(TAG, "WiFi desconectado; reintentando");
-        esp_wifi_connect();
-    }
-}
-
-static void ip_event_handler(void *arg, esp_event_base_t event_base,
-                             int32_t event_id, void *event_data)
-{
-    (void)arg;
-    if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
-        const ip_event_got_ip_t *event = (const ip_event_got_ip_t *)event_data;
-        ESP_LOGI(TAG, "IP obtenida: " IPSTR, IP2STR(&event->ip_info.ip));
-        xEventGroupSetBits(s_wifi_event_group, WIFI_GOT_IP_BIT);
-    }
-}
-
-static void wifi_init(void)
-{
-    ESP_ERROR_CHECK(esp_netif_init());
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
-    esp_netif_t *sta_netif = esp_netif_create_default_wifi_sta();
-    if (sta_netif == NULL) {
-        ESP_LOGE(TAG, "Failed to create default Wi-Fi STA interface");
-        abort();
-    }
-
-    s_wifi_event_group = xEventGroupCreate();
-    if (!s_wifi_event_group) {
-        ESP_LOGE(TAG, "No se pudo crear el grupo de eventos WiFi");
-        abort();
-    }
-
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
-    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID,
-                                               wifi_event_handler, NULL));
-    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP,
-                                               ip_event_handler, NULL));
-
-    wifi_config_t wifi_config = {0};
-    strncpy((char *)wifi_config.sta.ssid, CONFIG_CSI_WIFI_SSID,
-            sizeof(wifi_config.sta.ssid) - 1);
-    strncpy((char *)wifi_config.sta.password, CONFIG_CSI_WIFI_PASSWORD,
-            sizeof(wifi_config.sta.password) - 1);
-    wifi_config.sta.threshold.authmode = WIFI_AUTH_OPEN;
-
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-    ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
-
-#if CONFIG_IDF_TARGET_ESP32C5
-    ESP_ERROR_CHECK(esp_wifi_set_band_mode(CONFIG_WIFI_BAND_MODE));
-    wifi_protocols_t protocols = {
-        .ghz_2g = CONFIG_WIFI_2G_PROTOCOL,
-        .ghz_5g = CONFIG_WIFI_5G_PROTOCOL};
-    ESP_ERROR_CHECK(esp_wifi_set_protocols(ESP_IF_WIFI_STA, &protocols));
-    wifi_bandwidths_t bandwidth = {
-        .ghz_2g = CONFIG_WIFI_2G_BANDWIDTHS,
-        .ghz_5g = CONFIG_WIFI_5G_BANDWIDTHS};
-    ESP_ERROR_CHECK(esp_wifi_set_bandwidths(ESP_IF_WIFI_STA, &bandwidth));
-#elif (CONFIG_IDF_TARGET_ESP32C6 && ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 4, 0)) || \
-    CONFIG_IDF_TARGET_ESP32C61
-    ESP_ERROR_CHECK(esp_wifi_set_band_mode(CONFIG_WIFI_BAND_MODE));
-    wifi_protocols_t protocols = {.ghz_2g = CONFIG_WIFI_2G_PROTOCOL};
-    ESP_ERROR_CHECK(esp_wifi_set_protocols(ESP_IF_WIFI_STA, &protocols));
-    wifi_bandwidths_t bandwidth = {.ghz_2g = CONFIG_WIFI_2G_BANDWIDTHS};
-    ESP_ERROR_CHECK(esp_wifi_set_bandwidths(ESP_IF_WIFI_STA, &bandwidth));
-#else
-    ESP_ERROR_CHECK(esp_wifi_set_bandwidth(ESP_IF_WIFI_STA,
-                                           CONFIG_WIFI_BANDWIDTH));
-#endif
-
-    ESP_ERROR_CHECK(esp_wifi_start());
-    ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
-}
-
-static bool wifi_wait_for_ip(void)
-{
-    EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group, WIFI_GOT_IP_BIT,
-                                           pdFALSE, pdFALSE, pdMS_TO_TICKS(30000));
-    if ((bits & WIFI_GOT_IP_BIT) == 0) {
-        ESP_LOGE(TAG, "No se obtuvo IP en 30 segundos");
-        return false;
-    }
-
-    uint8_t primary = 0;
-    wifi_second_chan_t secondary = WIFI_SECOND_CHAN_NONE;
-    ESP_ERROR_CHECK(esp_wifi_get_channel(&primary, &secondary));
-    s_wifi_channel = primary;
-    ESP_LOGI(TAG, "Canal WiFi actual: %u; ESP-NOW usara este canal",
-             s_wifi_channel);
-    return true;
-}
-
 static void wifi_esp_now_init(esp_now_peer_info_t peer)
 {
     ESP_ERROR_CHECK(esp_now_init());
@@ -249,6 +162,28 @@ static void wifi_esp_now_init(esp_now_peer_info_t peer)
         .ersu = false,
         .dcm = false};
     ESP_ERROR_CHECK(esp_now_set_peer_rate_config(peer.peer_addr, &rate_config));
+}
+
+static void esp_now_receive_cb(const esp_now_recv_info_t *receive_info,
+                               const uint8_t *data, int data_len)
+{
+    (void)receive_info;
+    if (!data || data_len != sizeof(device_message_t)) return;
+    const device_message_t *message = (const device_message_t *)data;
+    if (!device_message_valid(message) ||
+        message->type != DEVICE_MSG_PAIR_HELLO) return;
+
+    s_pair_hello_count++;
+    if (s_wifi_channel < 1 || s_wifi_channel > 13) {
+        ESP_LOGE(TAG, "No se responde al emisor: canal Wi-Fi invalido=%u",
+                 (unsigned)s_wifi_channel);
+        return;
+    }
+    device_message_t reply;
+    device_message_init(&reply, DEVICE_MSG_PAIR_SYNC, message->seq);
+    reply.value[0] = s_wifi_channel;
+    reply.uptime_ms = (uint32_t)(esp_timer_get_time() / 1000);
+    esp_now_send(s_broadcast_peer, (const uint8_t *)&reply, sizeof(reply));
 }
 
 static bool try_queue_sensor_frame(const wifi_csi_info_t *info)
@@ -281,7 +216,41 @@ static bool try_queue_sensor_frame(const wifi_csi_info_t *info)
     frame.type = CSI_WIRE_FRAME_SENSOR;
     frame.seq = frame.sensor.seq;
     if (xQueueSend(s_transport_queue, &frame, 0) != pdTRUE) {
+        s_queue_drop_count++;
         ESP_LOGW(TAG, "Cola de transporte llena; SENSOR_DATA descartado");
+    } else {
+        s_sensor_rx_count++;
+    }
+    return true;
+}
+
+static bool try_queue_device_frame(const wifi_csi_info_t *info)
+{
+    if (!info || !info->payload ||
+        info->payload_len < SENSOR_PAYLOAD_OFFSET + sizeof(device_message_t)) {
+        return false;
+    }
+    device_message_t message;
+    memcpy(&message, info->payload + SENSOR_PAYLOAD_OFFSET, sizeof(message));
+    if (!device_message_valid(&message)) return false;
+
+    /* Los mensajes de emparejamiento no forman parte del dataset CSI. */
+    if (message.type == DEVICE_MSG_PAIR_HELLO ||
+        message.type == DEVICE_MSG_PAIR_SYNC ||
+        message.type == DEVICE_MSG_ACTUATOR_COMMAND) {
+        return true;
+    }
+    if (message.type != DEVICE_MSG_ACTUATOR_STATE) return true;
+
+    transport_frame_t frame = {0};
+    frame.type = CSI_WIRE_FRAME_ACTUATOR;
+    frame.seq = message.seq;
+    frame.device = message;
+    if (xQueueSend(s_transport_queue, &frame, 0) != pdTRUE) {
+        s_queue_drop_count++;
+        ESP_LOGW(TAG, "Cola llena; estado de actuadores descartado");
+    } else {
+        s_actuator_rx_count++;
     }
     return true;
 }
@@ -293,6 +262,9 @@ static void wifi_csi_rx_cb(void *ctx, wifi_csi_info_t *info)
         return;
     }
     if (memcmp(info->mac, CONFIG_CSI_SEND_MAC, 6) != 0) {
+        return;
+    }
+    if (try_queue_device_frame(info)) {
         return;
     }
     if (try_queue_sensor_frame(info)) {
@@ -364,12 +336,13 @@ static void wifi_csi_rx_cb(void *ctx, wifi_csi_info_t *info)
 #endif
 
     if (xQueueSend(s_transport_queue, &frame, 0) != pdTRUE) {
-        static uint32_t dropped = 0;
-        dropped++;
-        if ((dropped % 100) == 0) {
+        s_queue_drop_count++;
+        if ((s_queue_drop_count % 100) == 0) {
             ESP_LOGW(TAG, "Cola de transporte llena; CSI descartado (%lu acumulados)",
-                     (unsigned long)dropped);
+                     (unsigned long)s_queue_drop_count);
         }
+    } else {
+        s_csi_rx_count++;
     }
 }
 
@@ -453,6 +426,9 @@ static size_t append_wire_frame(uint8_t *body, size_t offset,
     } else if (frame->type == CSI_WIRE_FRAME_SENSOR) {
         memcpy(body + body_start, &frame->sensor, sizeof(frame->sensor));
         body_len = sizeof(frame->sensor);
+    } else if (frame->type == CSI_WIRE_FRAME_ACTUATOR) {
+        memcpy(body + body_start, &frame->device, sizeof(frame->device));
+        body_len = sizeof(frame->device);
     }
 
     header.frame_len = sizeof(header) + body_len;
@@ -460,26 +436,128 @@ static size_t append_wire_frame(uint8_t *body, size_t offset,
     return offset + sizeof(header) + body_len;
 }
 
-static bool resolve_udp_destination(struct sockaddr_in *destination)
+static bool copy_server_destination(struct sockaddr_in *destination)
 {
-    struct addrinfo hints = {0};
-    hints.ai_family = AF_INET;
-    hints.ai_socktype = SOCK_DGRAM;
-    struct addrinfo *result = NULL;
-    int err = getaddrinfo(CONFIG_CSI_UDP_HOST, NULL, &hints, &result);
-    if (err != 0 || result == NULL) {
-        ESP_LOGW(TAG, "No se pudo resolver destino UDP %s: %d",
-                 CONFIG_CSI_UDP_HOST, err);
+    if ((xEventGroupGetBits(s_network_events) & SERVER_FOUND_BIT) == 0) {
         return false;
     }
+    if (xSemaphoreTake(s_server_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
+        return false;
+    }
+    *destination = s_server_destination;
+    xSemaphoreGive(s_server_mutex);
+    return destination->sin_addr.s_addr != 0;
+}
 
-    memset(destination, 0, sizeof(*destination));
-    memcpy(destination, result->ai_addr, sizeof(*destination));
-    destination->sin_port = htons(CONFIG_CSI_UDP_PORT);
-    freeaddrinfo(result);
-    ESP_LOGI(TAG, "Destino UDP: %s:%d", CONFIG_CSI_UDP_HOST,
-             CONFIG_CSI_UDP_PORT);
-    return true;
+static bool command_from_current_server(const struct sockaddr_in *source)
+{
+    if (!source ||
+        (xEventGroupGetBits(s_network_events) & SERVER_FOUND_BIT) == 0) {
+        return false;
+    }
+    if (xSemaphoreTake(s_server_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
+        return false;
+    }
+    bool matches = source->sin_addr.s_addr ==
+                   s_server_destination.sin_addr.s_addr;
+    xSemaphoreGive(s_server_mutex);
+    return matches;
+}
+
+static void discovery_and_command_task(void *arg)
+{
+    (void)arg;
+    int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
+    if (sock < 0) {
+        ESP_LOGE(TAG, "No se pudo crear socket de descubrimiento");
+        vTaskDelete(NULL);
+        return;
+    }
+    int enabled = 1;
+    setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &enabled, sizeof(enabled));
+    struct timeval timeout = {.tv_sec = 1, .tv_usec = 0};
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+
+    struct sockaddr_in local = {
+        .sin_family = AF_INET,
+        .sin_port = htons(CSI_COMMAND_PORT),
+        .sin_addr.s_addr = htonl(INADDR_ANY),
+    };
+    if (bind(sock, (struct sockaddr *)&local, sizeof(local)) < 0) {
+        ESP_LOGE(TAG, "No se pudo abrir puerto de comandos %d", CSI_COMMAND_PORT);
+        close(sock);
+        vTaskDelete(NULL);
+        return;
+    }
+
+    struct sockaddr_in broadcast = {
+        .sin_family = AF_INET,
+        .sin_port = htons(CSI_DISCOVERY_PORT),
+        .sin_addr.s_addr = htonl(INADDR_BROADCAST),
+    };
+    int64_t last_discovery_us = 0;
+    uint32_t discovery_seq = 0;
+
+    while (true) {
+        int64_t now_us = esp_timer_get_time();
+        if (now_us - last_discovery_us >= 5000000) {
+            device_message_t discovery;
+            device_message_init(&discovery, DEVICE_MSG_SERVER_DISCOVERY,
+                                ++discovery_seq);
+            discovery.value[0] = CSI_COMMAND_PORT & 0xff;
+            discovery.value[1] = (CSI_COMMAND_PORT >> 8) & 0xff;
+            discovery.uptime_ms = (uint32_t)(now_us / 1000);
+            int sent = sendto(sock, &discovery, sizeof(discovery), 0,
+                              (struct sockaddr *)&broadcast,
+                              sizeof(broadcast));
+            if (sent == sizeof(discovery)) {
+                s_discovery_sent_count++;
+                if (s_discovery_sent_count == 1 ||
+                    (s_discovery_sent_count % 6) == 0) {
+                    ESP_LOGI(TAG,
+                             "Buscando servidor: broadcast UDP 255.255.255.255:%d intento=%lu",
+                             CSI_DISCOVERY_PORT,
+                             (unsigned long)s_discovery_sent_count);
+                }
+            } else {
+                s_udp_error_count++;
+                ESP_LOGW(TAG, "Fallo al enviar descubrimiento UDP");
+            }
+            last_discovery_us = now_us;
+        }
+
+        device_message_t message;
+        struct sockaddr_in source = {0};
+        socklen_t source_len = sizeof(source);
+        int received = recvfrom(sock, &message, sizeof(message), 0,
+                                (struct sockaddr *)&source, &source_len);
+        if (received != sizeof(message) || !device_message_valid(&message)) {
+            continue;
+        }
+        if (message.type == DEVICE_MSG_SERVER_REPLY) {
+            uint16_t port = (uint16_t)message.value[0] |
+                            ((uint16_t)message.value[1] << 8);
+            source.sin_port = htons(port ? port : CONFIG_CSI_UDP_PORT);
+            if (xSemaphoreTake(s_server_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+                s_server_destination = source;
+                xSemaphoreGive(s_server_mutex);
+                xEventGroupSetBits(s_network_events, SERVER_FOUND_BIT);
+                s_discovery_reply_count++;
+                ESP_LOGI(TAG, "Servidor encontrado: %s:%u",
+                         inet_ntoa(source.sin_addr),
+                         (unsigned)ntohs(source.sin_port));
+            }
+        } else if (message.type == DEVICE_MSG_ACTUATOR_COMMAND &&
+                   command_from_current_server(&source)) {
+            esp_err_t err = esp_now_send(s_broadcast_peer,
+                                         (const uint8_t *)&message,
+                                         sizeof(message));
+            if (err != ESP_OK) {
+                ESP_LOGW(TAG, "No se pudo reenviar comando: %s",
+                         esp_err_to_name(err));
+            }
+        }
+    }
 }
 
 static void udp_sender_task(void *arg)
@@ -503,17 +581,8 @@ static void udp_sender_task(void *arg)
     struct sockaddr_in destination = {0};
 
     while (true) {
-        if ((xEventGroupGetBits(s_wifi_event_group) & WIFI_GOT_IP_BIT) == 0) {
-            if (sock >= 0) {
-                close(sock);
-                sock = -1;
-            }
-            vTaskDelay(pdMS_TO_TICKS(250));
-            continue;
-        }
-
         if (sock < 0) {
-            if (!resolve_udp_destination(&destination)) {
+            if (!copy_server_destination(&destination)) {
                 vTaskDelay(pdMS_TO_TICKS(1000));
                 continue;
             }
@@ -526,6 +595,13 @@ static void udp_sender_task(void *arg)
         }
 
         if (xQueueReceive(s_transport_queue, frame, portMAX_DELAY) != pdTRUE) {
+            continue;
+        }
+        /* La IP del computador puede cambiar al cambiar de red. Refrescar el
+         * destino en cada envío evita conservar una dirección ya obsoleta. */
+        if (!copy_server_destination(&destination)) {
+            close(sock);
+            sock = -1;
             continue;
         }
 
@@ -542,10 +618,40 @@ static void udp_sender_task(void *arg)
                           (struct sockaddr *)&destination,
                           sizeof(destination));
         if (sent < 0) {
+            s_udp_error_count++;
             ESP_LOGW(TAG, "Envio UDP fallo; recreando socket");
             close(sock);
             sock = -1;
+            xEventGroupClearBits(s_network_events, SERVER_FOUND_BIT);
+        } else {
+            s_udp_sent_count++;
         }
+    }
+}
+
+static void serial_diagnostics_task(void *arg)
+{
+    (void)arg;
+    while (true) {
+        vTaskDelay(pdMS_TO_TICKS(10000));
+        bool server_found = s_network_events &&
+            ((xEventGroupGetBits(s_network_events) & SERVER_FOUND_BIT) != 0);
+        UBaseType_t queued = s_transport_queue ?
+            uxQueueMessagesWaiting(s_transport_queue) : 0;
+        ESP_LOGI(TAG,
+                 "DIAG WiFi=OK canal=%u servidor=%s discovery_tx=%lu reply=%lu "
+                 "pair_hello=%lu CSI_rx=%lu sensor_rx=%lu actuator_rx=%lu "
+                 "UDP_tx=%lu errores=%lu cola=%u descartados=%lu",
+                 (unsigned)s_wifi_channel, server_found ? "OK" : "BUSCANDO",
+                 (unsigned long)s_discovery_sent_count,
+                 (unsigned long)s_discovery_reply_count,
+                 (unsigned long)s_pair_hello_count,
+                 (unsigned long)s_csi_rx_count,
+                 (unsigned long)s_sensor_rx_count,
+                 (unsigned long)s_actuator_rx_count,
+                 (unsigned long)s_udp_sent_count,
+                 (unsigned long)s_udp_error_count, (unsigned)queued,
+                 (unsigned long)s_queue_drop_count);
     }
 }
 
@@ -558,19 +664,26 @@ void app_main(void)
     }
     ESP_ERROR_CHECK(ret);
 
-    wifi_init();
-    while (!wifi_wait_for_ip()) {
-        ESP_LOGW(TAG, "Esperando una conexion WiFi valida para CSI/ESP-NOW");
-        vTaskDelay(pdMS_TO_TICKS(1000));
+    wifi_manager_start();
+    while (!wifi_manager_wait_connected(pdMS_TO_TICKS(1000))) {
+        ESP_LOGI(TAG, "Esperando configuracion Wi-Fi desde el portal");
     }
+    do {
+        s_wifi_channel = wifi_manager_channel();
+        if (s_wifi_channel < 1 || s_wifi_channel > 13) {
+            ESP_LOGW(TAG, "Esperando que el driver reporte el canal Wi-Fi");
+            vTaskDelay(pdMS_TO_TICKS(500));
+        }
+    } while (s_wifi_channel < 1 || s_wifi_channel > 13);
+    ESP_LOGI(TAG, "ESP-NOW y CSI usaran el canal real %u", s_wifi_channel);
 
     esp_now_peer_info_t peer = {
-        /* 0: usa el canal actual de la interfaz STA asociada al router. */
         .channel = 0,
         .ifidx = WIFI_IF_STA,
         .encrypt = false,
         .peer_addr = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff}};
     wifi_esp_now_init(peer);
+    ESP_ERROR_CHECK(esp_now_register_recv_cb(esp_now_receive_cb));
 
     s_transport_queue = xQueueCreate(CONFIG_CSI_UDP_QUEUE_LENGTH,
                                      sizeof(transport_frame_t));
@@ -578,9 +691,17 @@ void app_main(void)
         ESP_LOGE(TAG, "No se pudo crear la cola de transporte");
         abort();
     }
+    s_network_events = xEventGroupCreate();
+    s_server_mutex = xSemaphoreCreateMutex();
+    if (!s_network_events || !s_server_mutex) {
+        ESP_LOGE(TAG, "No se pudo crear sincronizacion de red");
+        abort();
+    }
+    xTaskCreate(discovery_and_command_task, "discovery_cmd", 6144, NULL, 5, NULL);
     xTaskCreate(udp_sender_task, "udp_sender", 8192, NULL, 5, NULL);
+    xTaskCreate(serial_diagnostics_task, "serial_diag", 4096, NULL, 3, NULL);
 
     wifi_csi_init();
-    ESP_LOGI(TAG, "CSI activo; enviando datagramas UDP a %s:%d",
-             CONFIG_CSI_UDP_HOST, CONFIG_CSI_UDP_PORT);
+    ESP_LOGI(TAG, "CSI activo; buscando servidor por UDP broadcast en %d",
+             CSI_DISCOVERY_PORT);
 }

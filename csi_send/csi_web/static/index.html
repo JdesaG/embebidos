@@ -122,7 +122,7 @@
             <div class="model-debug-block">
               <h3>Probabilidad de apnea</h3>
               <canvas id="modelProbabilityCanvas" width="840" height="240"></canvas>
-              <p class="model-debug-note">La línea punteada representa el umbral de decisión 0.50.</p>
+              <p id="modelDecisionNote" class="model-debug-note">La línea punteada representa el umbral de decisión del modelo.</p>
             </div>
           </div>
           <div id="modelFeatures" class="model-feature-grid"></div>
@@ -145,10 +145,6 @@
               <article>
                 <span>Temperatura</span>
                 <strong id="sensorTemp">-- C</strong>
-              </article>
-              <article>
-                <span>BPM</span>
-                <strong id="sensorBpm">--</strong>
               </article>
               <article>
                 <span>Sonido</span>
@@ -233,6 +229,12 @@
                 <span id="collectionProgress"></span>
               </div>
               <button id="stopCollectionBtn" class="secondary" disabled>Detener</button>
+            </div>
+            <div id="manualHoldAction" class="manual-hold-action" hidden>
+              <button id="endHoldBtn" type="button" disabled>
+                Terminé la pausa — guardar y volver a respirar
+              </button>
+              <p>Presiona este botón justo antes de volver a respirar. La sesión se cerrará automáticamente.</p>
             </div>
             <p class="collector-detail" id="collectionDetail">Primero verifica que la web reciba CSI; luego presiona un estado para guardar una sesión cronometrada.</p>
           </div>

@@ -1,0 +1,308 @@
+{
+  "generated_at": "2026-08-12T18:57:33+00:00",
+  "source_files": [
+    "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_092121_breathing_off_breathing_off.csv",
+    "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_092928_breathing_off_breathing_off.csv",
+    "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_093242_breathing_off_breathing_off.csv",
+    "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_093811_breathing_off_breathing_off.csv",
+    "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_094151_breathing_off_breathing_off.csv",
+    "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_094454_breathing_off_breathing_off.csv",
+    "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_094809_breathing_off_breathing_off.csv"
+  ],
+  "source_files_unchanged": true,
+  "parameters": {
+    "files": [
+      "csi_send/data/raw/session_20260812_092121_breathing_off_breathing_off.csv",
+      "csi_send/data/raw/session_20260812_092928_breathing_off_breathing_off.csv",
+      "csi_send/data/raw/session_20260812_093242_breathing_off_breathing_off.csv",
+      "csi_send/data/raw/session_20260812_093811_breathing_off_breathing_off.csv",
+      "csi_send/data/raw/session_20260812_094151_breathing_off_breathing_off.csv",
+      "csi_send/data/raw/session_20260812_094454_breathing_off_breathing_off.csv",
+      "csi_send/data/raw/session_20260812_094809_breathing_off_breathing_off.csv"
+    ],
+    "base_dir": "csi_send",
+    "output_dir": "data/filtered/breathing_baseline_20260812_w20",
+    "window_s": 20.0,
+    "stride_s": 5.0,
+    "target_hz": 50.0,
+    "stabilization_s": 10.0,
+    "transition_guard_s": 2.0,
+    "max_gap_s": 0.1,
+    "min_sample_ratio": 0.8,
+    "outlier_mad_z": 6.0,
+    "max_clip_fraction": 0.02,
+    "breathing_quantile": 0.25,
+    "respiratory_low_hz": 0.1,
+    "respiratory_high_hz": 0.5
+  },
+  "filters": [
+    "valid parseable CSI with a consistent even payload length per session",
+    "initial stabilization exclusion",
+    "100% label purity and transition guard",
+    "minimum sample coverage",
+    "maximum inter-sample time gap",
+    "per-subcarrier median/MAD spike winsorization",
+    "maximum clipped-amplitude fraction",
+    "valid active-subcarrier/PCA/respiratory feature extraction",
+    "conservative exclusion of hold windows whose activity matches session breathing baseline"
+  ],
+  "candidate_windows": 205,
+  "quality_counts": {
+    "insufficient_samples": 12,
+    "time_gap": 95,
+    "accepted": 96,
+    "too_many_amplitude_outliers": 2
+  },
+  "confidence_counts": {
+    "trusted_breathing": 96
+  },
+  "final_windows": {
+    "total": 96,
+    "breathing": 96,
+    "hold_breath": 0
+  },
+  "session_summaries": [
+    {
+      "source_file": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_092121_breathing_off_breathing_off.csv",
+      "metadata": {
+        "session_id": "session_20260812_092121_breathing_off",
+        "label": "breathing_off",
+        "duration_s": 332.607,
+        "requested_duration_s": 180.0,
+        "description": "Persona quieta respirando normal en medio de las ESP32.",
+        "tx_position": "",
+        "rx_position": "",
+        "distance_cm": "",
+        "height_cm": "",
+        "environment": "off",
+        "person_position": "between_tx_rx",
+        "notes": "",
+        "events": [],
+        "started_at": "2026-08-12T14:21:21.960+00:00",
+        "ended_at": "2026-08-12T14:26:54.563+00:00",
+        "raw_file": "data/raw/session_20260812_092121_breathing_off_breathing_off.csv",
+        "metadata_file": "data/metadata/session_20260812_092121_breathing_off_breathing_off.json",
+        "samples_collected": 11880,
+        "corrupt_lines": 0,
+        "sample_rate_estimated_hz": 35.718,
+        "stop_reason": "server_shutdown"
+      },
+      "valid_rows": 11880,
+      "payload_lengths": {
+        "256": 11880
+      },
+      "data_start_s": 0.001223,
+      "data_end_s": 153.959174,
+      "breathing_activity_threshold": 2.0766362090644215
+    },
+    {
+      "source_file": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_092928_breathing_off_breathing_off.csv",
+      "metadata": {
+        "session_id": "session_20260812_092928_breathing_off",
+        "label": "breathing_off",
+        "duration_s": 180.0,
+        "requested_duration_s": 180.0,
+        "description": "Persona quieta respirando normal en medio de las ESP32.",
+        "tx_position": "",
+        "rx_position": "",
+        "distance_cm": "",
+        "height_cm": "",
+        "environment": "off",
+        "person_position": "between_tx_rx",
+        "notes": "",
+        "events": [],
+        "started_at": "2026-08-12T14:29:28.917+00:00",
+        "ended_at": "2026-08-12T14:32:28.916+00:00",
+        "raw_file": "data/raw/session_20260812_092928_breathing_off_breathing_off.csv",
+        "metadata_file": "data/metadata/session_20260812_092928_breathing_off_breathing_off.json",
+        "samples_collected": 13211,
+        "corrupt_lines": 0,
+        "sample_rate_estimated_hz": 73.394,
+        "stop_reason": "duration_complete"
+      },
+      "valid_rows": 13211,
+      "payload_lengths": {
+        "256": 13211
+      },
+      "data_start_s": 0.00181,
+      "data_end_s": 179.998616,
+      "breathing_activity_threshold": 1.2880771629677188
+    },
+    {
+      "source_file": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_093242_breathing_off_breathing_off.csv",
+      "metadata": {
+        "session_id": "session_20260812_093242_breathing_off",
+        "label": "breathing_off",
+        "duration_s": 180.004,
+        "requested_duration_s": 180.0,
+        "description": "Persona quieta respirando normal en medio de las ESP32.",
+        "tx_position": "",
+        "rx_position": "",
+        "distance_cm": "",
+        "height_cm": "",
+        "environment": "off",
+        "person_position": "between_tx_rx",
+        "notes": "",
+        "events": [],
+        "started_at": "2026-08-12T14:32:42.053+00:00",
+        "ended_at": "2026-08-12T14:37:21.689+00:00",
+        "raw_file": "data/raw/session_20260812_093242_breathing_off_breathing_off.csv",
+        "metadata_file": "data/metadata/session_20260812_093242_breathing_off_breathing_off.json",
+        "samples_collected": 16790,
+        "corrupt_lines": 0,
+        "sample_rate_estimated_hz": 93.275,
+        "stop_reason": "duration_complete"
+      },
+      "valid_rows": 16790,
+      "payload_lengths": {
+        "256": 16790
+      },
+      "data_start_s": 0.003683,
+      "data_end_s": 179.999167,
+      "breathing_activity_threshold": 1.3519811863202338
+    },
+    {
+      "source_file": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_093811_breathing_off_breathing_off.csv",
+      "metadata": {
+        "session_id": "session_20260812_093811_breathing_off",
+        "label": "breathing_off",
+        "duration_s": 183.119,
+        "requested_duration_s": 180.0,
+        "description": "Persona quieta respirando normal en medio de las ESP32.",
+        "tx_position": "",
+        "rx_position": "",
+        "distance_cm": "",
+        "height_cm": "",
+        "environment": "off",
+        "person_position": "between_tx_rx",
+        "notes": "",
+        "events": [],
+        "started_at": "2026-08-12T14:38:11.536+00:00",
+        "ended_at": "2026-08-12T14:41:42.123+00:00",
+        "raw_file": "data/raw/session_20260812_093811_breathing_off_breathing_off.csv",
+        "metadata_file": "data/metadata/session_20260812_093811_breathing_off_breathing_off.json",
+        "samples_collected": 15969,
+        "corrupt_lines": 0,
+        "sample_rate_estimated_hz": 87.206,
+        "stop_reason": "duration_complete"
+      },
+      "valid_rows": 15969,
+      "payload_lengths": {
+        "256": 15969
+      },
+      "data_start_s": 3.552786,
+      "data_end_s": 177.514523,
+      "breathing_activity_threshold": 1.4614064518947525
+    },
+    {
+      "source_file": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_094151_breathing_off_breathing_off.csv",
+      "metadata": {
+        "session_id": "session_20260812_094151_breathing_off",
+        "label": "breathing_off",
+        "duration_s": 180.006,
+        "requested_duration_s": 180.0,
+        "description": "Persona quieta respirando normal en medio de las ESP32.",
+        "tx_position": "",
+        "rx_position": "",
+        "distance_cm": "",
+        "height_cm": "",
+        "environment": "off",
+        "person_position": "between_tx_rx",
+        "notes": "",
+        "events": [],
+        "started_at": "2026-08-12T14:41:51.818+00:00",
+        "ended_at": "2026-08-12T14:44:51.822+00:00",
+        "raw_file": "data/raw/session_20260812_094151_breathing_off_breathing_off.csv",
+        "metadata_file": "data/metadata/session_20260812_094151_breathing_off_breathing_off.json",
+        "samples_collected": 16072,
+        "corrupt_lines": 0,
+        "sample_rate_estimated_hz": 89.286,
+        "stop_reason": "duration_complete"
+      },
+      "valid_rows": 16072,
+      "payload_lengths": {
+        "256": 16072
+      },
+      "data_start_s": 0.001435,
+      "data_end_s": 179.996503,
+      "breathing_activity_threshold": 1.1185351188854238
+    },
+    {
+      "source_file": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_094454_breathing_off_breathing_off.csv",
+      "metadata": {
+        "session_id": "session_20260812_094454_breathing_off",
+        "label": "breathing_off",
+        "duration_s": 180.596,
+        "requested_duration_s": 180.0,
+        "description": "Persona quieta respirando normal en medio de las ESP32.",
+        "tx_position": "",
+        "rx_position": "",
+        "distance_cm": "",
+        "height_cm": "",
+        "environment": "off",
+        "person_position": "between_tx_rx",
+        "notes": "",
+        "events": [],
+        "started_at": "2026-08-12T14:44:54.187+00:00",
+        "ended_at": "2026-08-12T14:47:57.455+00:00",
+        "raw_file": "data/raw/session_20260812_094454_breathing_off_breathing_off.csv",
+        "metadata_file": "data/metadata/session_20260812_094454_breathing_off_breathing_off.json",
+        "samples_collected": 16391,
+        "corrupt_lines": 0,
+        "sample_rate_estimated_hz": 90.761,
+        "stop_reason": "duration_complete"
+      },
+      "valid_rows": 16391,
+      "payload_lengths": {
+        "256": 16391
+      },
+      "data_start_s": 0.001058,
+      "data_end_s": 176.178147,
+      "breathing_activity_threshold": 1.5199019051041287
+    },
+    {
+      "source_file": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_094809_breathing_off_breathing_off.csv",
+      "metadata": {
+        "session_id": "session_20260812_094809_breathing_off",
+        "label": "breathing_off",
+        "duration_s": 180.008,
+        "requested_duration_s": 180.0,
+        "description": "Persona quieta respirando normal en medio de las ESP32.",
+        "tx_position": "",
+        "rx_position": "",
+        "distance_cm": "",
+        "height_cm": "",
+        "environment": "off",
+        "person_position": "between_tx_rx",
+        "notes": "",
+        "events": [],
+        "started_at": "2026-08-12T14:48:09.554+00:00",
+        "ended_at": "2026-08-12T14:51:10.769+00:00",
+        "raw_file": "data/raw/session_20260812_094809_breathing_off_breathing_off.csv",
+        "metadata_file": "data/metadata/session_20260812_094809_breathing_off_breathing_off.json",
+        "samples_collected": 15440,
+        "corrupt_lines": 0,
+        "sample_rate_estimated_hz": 85.774,
+        "stop_reason": "duration_complete"
+      },
+      "valid_rows": 15440,
+      "payload_lengths": {
+        "256": 15440
+      },
+      "data_start_s": 2.940666,
+      "data_end_s": 179.999726,
+      "breathing_activity_threshold": 0.9368265597987352
+    }
+  ],
+  "artifacts": {
+    "manifest": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/filtered/breathing_baseline_20260812_w20/window_manifest.csv",
+    "features": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/filtered/breathing_baseline_20260812_w20/X_features.npy",
+    "labels": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/filtered/breathing_baseline_20260812_w20/y_labels.npy",
+    "groups": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/filtered/breathing_baseline_20260812_w20/groups.npy"
+  },
+  "limitations": [
+    "Breathing inside a scheduled hold has no external ground-truth timestamp.",
+    "Ambiguous hold windows are excluded, never relabeled as breathing.",
+    "The confidence filter is suitable for conservative training curation, not an independent performance claim."
+  ]
+}

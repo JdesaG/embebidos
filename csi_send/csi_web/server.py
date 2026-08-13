@@ -86,11 +86,22 @@ WIRE_BATCH_HEADER = struct.Struct("<4sBBH")
 WIRE_FRAME_HEADER = struct.Struct("<BBHI")
 WIRE_CSI_BODY = struct.Struct("<IbbBBHHBB6s")
 WIRE_SENSOR_BODY = struct.Struct("<IHHIhHBBHBBI")
+WIRE_DEVICE_BODY = struct.Struct("<IBBHI8BI")
 WIRE_BATCH_MAGIC = b"CSIH"
 WIRE_BATCH_VERSION = 1
 WIRE_FRAME_CSI = 1
 WIRE_FRAME_SENSOR = 2
+WIRE_FRAME_ACTUATOR = 3
 WIRE_MAX_BODY = 64 * 1024
+
+DEVICE_MESSAGE_MAGIC = 0x44495343
+DEVICE_MESSAGE_VERSION = 1
+DEVICE_MSG_ACTUATOR_COMMAND = 3
+DEVICE_MSG_ACTUATOR_STATE = 4
+DEVICE_MSG_SERVER_DISCOVERY = 5
+DEVICE_MSG_SERVER_REPLY = 6
+ENERGY_MODES = {"monitoring": 0, "eco": 1, "standby": 2}
+ENERGY_MODE_NAMES = {value: key for key, value in ENERGY_MODES.items()}
 
 COLLECTION_PRESETS = {
     "empty_off": {
@@ -106,18 +117,12 @@ COLLECTION_PRESETS = {
         "environment": "off",
     },
     "hold_breath_off": {
-        "description": "Muñeco respirando y detenido por ciclos balanceados de 60 s.",
-        "duration_s": 360,
+        "description": "Persona respirando 60 s; despues de la alarma mantiene una pausa voluntaria hasta pulsar el boton de finalizar.",
+        "duration_s": 180,
         "person_position": "between_tx_rx",
         "environment": "off",
-        "events": [
-            {"start_s": 0, "end_s": 60, "label": "breathing"},
-            {"start_s": 60, "end_s": 120, "label": "hold_breath"},
-            {"start_s": 120, "end_s": 180, "label": "breathing"},
-            {"start_s": 180, "end_s": 240, "label": "hold_breath"},
-            {"start_s": 240, "end_s": 300, "label": "breathing"},
-            {"start_s": 300, "end_s": 360, "label": "hold_breath"},
-        ],
+        "manual_hold": True,
+        "manual_hold_start_s": 60,
     },
     "walking_between_off": {
         "description": "Persona caminando entre las ESP32.",
@@ -185,7 +190,7 @@ MODEL_FEATURES = [
     "peak_power",
 ]
 
-DEFAULT_MODEL_PATH = str(Path(__file__).resolve().parents[1] / "models" / "apnea_model_july_2026.joblib")
+DEFAULT_MODEL_PATH = str(Path(__file__).resolve().parents[1] / "models" / "manual_hold_specialized_20260812.joblib")
 DEFAULT_TELEGRAM_ALERT_MESSAGE = "\U0001f6a8 \u26a0\ufe0f ALERTA DE AHOGO: posible apnea detectada."
 LOCAL_ENV_FILENAME = ".env.local"
 DEFAULT_LOG_DIRNAME = "logs"
@@ -439,6 +444,7 @@ class RealtimeApneaInference:
         self.welch = None
         self.model = None
         self.scaler = None
+        self.decision_threshold = 0.5
         self.features = list(MODEL_FEATURES)
         self.status = {
             "enabled": False,
@@ -460,6 +466,7 @@ class RealtimeApneaInference:
             "apnea_probability": None,
             "confidence": None,
             "model_score": None,
+            "decision_threshold": self.decision_threshold,
             "apnea_duration_s": 0,
             "pc1_var_explained": None,
             "features": {},
@@ -505,6 +512,8 @@ class RealtimeApneaInference:
             self.model = loaded.get("model") or loaded.get("clf") or loaded.get("classifier")
             self.scaler = loaded.get("scaler")
             self.features = list(loaded.get("features") or loaded.get("feature_names") or MODEL_FEATURES)
+            self.decision_threshold = float(loaded.get("decision_threshold", 0.5))
+            self.status["decision_threshold"] = self.decision_threshold
         else:
             self.model = loaded
 
@@ -704,6 +713,7 @@ class RealtimeApneaInference:
                 apnea_probability = float(proba[classes.index(1)])
             else:
                 apnea_probability = float(proba[-1])
+            prediction = 1 if apnea_probability >= self.decision_threshold else 0
             confidence = float(max(proba))
         elif hasattr(self.model, "decision_function"):
             score = float(self.model.decision_function(row)[0])
@@ -927,9 +937,19 @@ class CsiRecorder:
             label = safe_name(config.get("label", "unknown"))
             preset = COLLECTION_PRESETS.get(label, {})
             duration_s = float(config.get("duration_s") or preset.get("duration_s") or 180)
+            manual_hold = bool(preset.get("manual_hold", False))
+            manual_hold_start_s = float(preset.get("manual_hold_start_s") or 60)
+            if manual_hold and duration_s <= manual_hold_start_s:
+                raise ValueError("El limite de la sesion debe ser mayor que el inicio de la pausa")
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             session_id = safe_name(config.get("session_id") or f"session_{timestamp}_{label}")
-            events = config.get("events") or preset.get("events") or []
+            if manual_hold:
+                events = [
+                    {"start_s": 0.0, "end_s": manual_hold_start_s, "label": "breathing"},
+                    {"start_s": manual_hold_start_s, "end_s": duration_s, "label": "hold_breath"},
+                ]
+            else:
+                events = config.get("events") or preset.get("events") or []
             events = [
                 {
                     "start_s": float(event["start_s"]),
@@ -955,6 +975,11 @@ class CsiRecorder:
                 "label": label,
                 "duration_s": duration_s,
                 "requested_duration_s": duration_s,
+                "manual_hold": manual_hold,
+                "manual_hold_start_s": manual_hold_start_s if manual_hold else None,
+                "manual_hold_ended_s": None,
+                "hold_duration_s": None,
+                "valid_for_training": None if manual_hold else True,
                 "description": config.get("description") or preset.get("description", ""),
                 "tx_position": config.get("tx_position", ""),
                 "rx_position": config.get("rx_position", ""),
@@ -985,6 +1010,21 @@ class CsiRecorder:
             )
             return self.snapshot_locked()
 
+    def end_manual_hold(self):
+        with self.lock:
+            if not self.active or not self.session:
+                raise RuntimeError("No hay una sesion activa")
+            if not self.session.get("manual_hold"):
+                raise RuntimeError("La sesion activa no usa una pausa manual")
+            elapsed_s = max(time.monotonic() - self.started_monotonic, 0.0)
+            hold_start_s = float(self.session.get("manual_hold_start_s") or 0.0)
+            if elapsed_s < hold_start_s:
+                raise RuntimeError("La alarma de inicio de pausa aun no ha sonado")
+            self.session["manual_hold_ended_s"] = round(elapsed_s, 3)
+            self.session["hold_duration_s"] = round(max(0.0, elapsed_s - hold_start_s), 3)
+            self.session["valid_for_training"] = True
+            return self._stop_locked("participant_ended_hold")
+
     def stop(self, reason="manual"):
         with self.lock:
             return self._stop_locked(reason)
@@ -994,6 +1034,22 @@ class CsiRecorder:
             return self.last_completed
 
         elapsed_s = max(time.monotonic() - self.started_monotonic, 1e-6)
+        if self.session.get("manual_hold"):
+            if reason != "participant_ended_hold":
+                self.session["valid_for_training"] = False
+            trimmed_events = []
+            for event in self.session.get("events", []):
+                start_s = float(event["start_s"])
+                if start_s >= elapsed_s:
+                    continue
+                trimmed_events.append(
+                    {
+                        "start_s": start_s,
+                        "end_s": min(float(event["end_s"]), elapsed_s),
+                        "label": event["label"],
+                    }
+                )
+            self.session["events"] = trimmed_events
         self.session["ended_at"] = iso_now()
         self.session["duration_s"] = round(elapsed_s, 3)
         self.session["samples_collected"] = self.sample_index
@@ -1114,6 +1170,19 @@ class CsiRecorder:
         elapsed_s = time.monotonic() - self.started_monotonic
         duration_s = float(self.session["requested_duration_s"])
         remaining_s = max(0.0, duration_s - elapsed_s)
+        manual_hold = bool(self.session.get("manual_hold"))
+        manual_hold_start_s = self.session.get("manual_hold_start_s")
+        hold_started = bool(manual_hold and elapsed_s >= float(manual_hold_start_s or 0.0))
+        schedule = schedule_state_at(elapsed_s, self.session["label"], self.session["events"])
+        if manual_hold and hold_started:
+            schedule.update(
+                {
+                    "phase_end_s": None,
+                    "phase_remaining_s": None,
+                    "next_phase_label": None,
+                    "next_phase_start_s": None,
+                }
+            )
         return {
             "active": True,
             "session_id": self.session["session_id"],
@@ -1123,9 +1192,18 @@ class CsiRecorder:
             "elapsed_s": round(elapsed_s, 3),
             "duration_s": duration_s,
             "remaining_s": round(remaining_s, 3),
-            "progress": min(1.0, elapsed_s / duration_s) if duration_s else 0.0,
+            "progress": (
+                min(1.0, elapsed_s / float(manual_hold_start_s))
+                if manual_hold and manual_hold_start_s
+                else min(1.0, elapsed_s / duration_s) if duration_s else 0.0
+            ),
+            "manual_hold": manual_hold,
+            "manual_hold_start_s": manual_hold_start_s,
+            "hold_started": hold_started,
+            "can_end_hold": hold_started,
+            "hold_elapsed_s": round(max(0.0, elapsed_s - float(manual_hold_start_s or 0.0)), 3) if manual_hold else None,
             "events": self.session["events"],
-            "schedule": schedule_state_at(elapsed_s, self.session["label"], self.session["events"]),
+            "schedule": schedule,
             "samples_collected": self.sample_index,
             "corrupt_lines": self.corrupt_lines,
             "raw_file": self.session["raw_file"],
@@ -1144,6 +1222,8 @@ class CsiState:
         self.notifier = notifier
         self.latest = None
         self.latest_sensor = None
+        self.latest_actuator = None
+        self.gateway = None
         self.seq = 0
         self.connected = False
         self.transport = "udp"
@@ -1154,6 +1234,7 @@ class CsiState:
         self.baud = 0
         self.packet_count = 0
         self.sensor_packet_count = 0
+        self.actuator_packet_count = 0
         self.parse_errors = 0
         self.serial_errors = []
         self.last_error = ""
@@ -1215,6 +1296,24 @@ class CsiState:
             self.sensor_packet_count += 1
             self.condition.notify_all()
 
+    def publish_actuator(self, payload, raw):
+        with self.condition:
+            self.latest_actuator = payload
+            self.last_raw = raw
+            self.seq += 1
+            self.actuator_packet_count += 1
+            self.condition.notify_all()
+
+    def set_gateway(self, address):
+        with self.condition:
+            self.gateway = {
+                "ip": address[0],
+                "command_port": int(address[1]),
+                "last_seen": iso_now(),
+            }
+            self.seq += 1
+            self.condition.notify_all()
+
     def add_parse_error(self, raw, error):
         with self.condition:
             self.parse_errors += 1
@@ -1240,11 +1339,14 @@ class CsiState:
                 "baud": self.baud,
                 "packet_count": self.packet_count,
                 "sensor_packet_count": self.sensor_packet_count,
+                "actuator_packet_count": self.actuator_packet_count,
                 "parse_errors": self.parse_errors,
                 "last_error": self.last_error,
                 "last_raw": self.last_raw[-500:],
                 "latest": self.latest,
                 "latest_sensor": self.latest_sensor,
+                "latest_actuator": self.latest_actuator,
+                "gateway": self.gateway,
             }
         snapshot["collection"] = self.recorder.snapshot()
         snapshot["inference"] = self.inference.snapshot()
@@ -1543,6 +1645,35 @@ def decode_udp_batch(body):
                 )
             )
             decoded.append(("sensor", parse_sensor_line(sensor_line), sensor_line, None))
+        elif frame_type == WIRE_FRAME_ACTUATOR:
+            if frame_start + WIRE_DEVICE_BODY.size > frame_end:
+                raise ValueError("ACTUATOR_STATE UDP incompleto")
+            values = WIRE_DEVICE_BODY.unpack_from(body, frame_start)
+            magic, version, message_type, message_size, message_seq = values[:5]
+            control = values[5:13]
+            uptime_ms = values[13]
+            if (
+                magic != DEVICE_MESSAGE_MAGIC
+                or version != DEVICE_MESSAGE_VERSION
+                or message_type != DEVICE_MSG_ACTUATOR_STATE
+                or message_size != WIRE_DEVICE_BODY.size
+            ):
+                raise ValueError("ACTUATOR_STATE UDP invalido")
+            payload = {
+                "seq": message_seq,
+                "light_on": bool(control[0]),
+                "brightness": control[1],
+                "red": control[2],
+                "green": control[3],
+                "blue": control[4],
+                "buzzer_override": bool(control[5]),
+                "buzzer_on": bool(control[6]),
+                "energy_mode": ENERGY_MODE_NAMES.get(control[7], "monitoring"),
+                "uptime_ms": uptime_ms,
+                "received_at": iso_now(),
+            }
+            raw_line = "ACTUATOR_STATE," + json.dumps(payload, separators=(",", ":"))
+            decoded.append(("actuator", payload, raw_line, None))
         else:
             raise ValueError(f"tipo de frame UDP desconocido: {frame_type}")
         offset = frame_end
@@ -1555,19 +1686,158 @@ def decode_udp_batch(body):
 def publish_decoded_batch(state, decoded):
     csi_count = 0
     sensor_count = 0
+    actuator_count = 0
     for kind, payload, raw_line, record in decoded:
         if kind == "csi":
             state.recorder.record_sample(raw_line, record)
             state.publish(payload, raw_line)
             csi_count += 1
-        else:
+        elif kind == "sensor":
             state.publish_sensor(payload, raw_line)
             sensor_count += 1
-    return csi_count, sensor_count
+        else:
+            state.publish_actuator(payload, raw_line)
+            actuator_count += 1
+    return csi_count, sensor_count, actuator_count
+
+
+class DiscoveryCommandServer:
+    """Discovers the gateway without fixed IP and sends actuator commands."""
+
+    def __init__(self, host, port, ingest_port, state):
+        self.host = host
+        self.port = int(port)
+        self.ingest_port = int(ingest_port)
+        self.state = state
+        self.sock = None
+        self.thread = None
+        self.stop_event = threading.Event()
+        self.lock = threading.Lock()
+        self.gateway_address = None
+        self.command_seq = 0
+
+    def start(self):
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        self.sock.bind((self.host, self.port))
+        self.sock.settimeout(1.0)
+        self.thread = threading.Thread(target=self.run, name="csi-discovery", daemon=True)
+        self.thread.start()
+
+    def run(self):
+        while not self.stop_event.is_set():
+            try:
+                body, source = self.sock.recvfrom(256)
+            except socket.timeout:
+                continue
+            except OSError:
+                return
+            if len(body) != WIRE_DEVICE_BODY.size:
+                continue
+            values = WIRE_DEVICE_BODY.unpack(body)
+            magic, version, message_type, message_size, sequence = values[:5]
+            if (
+                magic != DEVICE_MESSAGE_MAGIC
+                or version != DEVICE_MESSAGE_VERSION
+                or message_size != WIRE_DEVICE_BODY.size
+                or message_type != DEVICE_MSG_SERVER_DISCOVERY
+            ):
+                continue
+            control = values[5:13]
+            command_port = int(control[0]) | (int(control[1]) << 8)
+            gateway = (source[0], command_port or source[1])
+            with self.lock:
+                changed = gateway != self.gateway_address
+                self.gateway_address = gateway
+            self.state.set_gateway(gateway)
+            if changed:
+                self.state.logs.info(
+                    "network",
+                    "Gateway CSI descubierto.",
+                    context={"ip": gateway[0], "command_port": gateway[1]},
+                )
+
+            reply_values = [self.ingest_port & 0xFF, (self.ingest_port >> 8) & 0xFF]
+            reply_values.extend([0] * 6)
+            reply = WIRE_DEVICE_BODY.pack(
+                DEVICE_MESSAGE_MAGIC,
+                DEVICE_MESSAGE_VERSION,
+                DEVICE_MSG_SERVER_REPLY,
+                WIRE_DEVICE_BODY.size,
+                sequence,
+                *reply_values,
+                int(time.monotonic() * 1000) & 0xFFFFFFFF,
+            )
+            try:
+                self.sock.sendto(reply, gateway)
+            except OSError as exc:
+                self.state.logs.error("network", "No se pudo responder al gateway.", exc=exc)
+
+    @staticmethod
+    def _byte(value, default=0):
+        try:
+            return max(0, min(255, int(value)))
+        except (TypeError, ValueError):
+            return default
+
+    def send_command(self, payload):
+        with self.lock:
+            gateway = self.gateway_address
+            self.command_seq = (self.command_seq + 1) & 0xFFFFFFFF
+            sequence = self.command_seq
+        if gateway is None:
+            raise RuntimeError("Aún no se ha descubierto el gateway CSI")
+
+        mode_name = str(payload.get("energy_mode", "monitoring")).lower()
+        if mode_name not in ENERGY_MODES:
+            raise ValueError("energy_mode debe ser monitoring, eco o standby")
+        values = [
+            1 if payload.get("light_on") else 0,
+            self._byte(payload.get("brightness"), 76),
+            self._byte(payload.get("red"), 255),
+            self._byte(payload.get("green"), 180),
+            self._byte(payload.get("blue"), 80),
+            1 if payload.get("buzzer_override") else 0,
+            1 if payload.get("buzzer_on") else 0,
+            ENERGY_MODES[mode_name],
+        ]
+        message = WIRE_DEVICE_BODY.pack(
+            DEVICE_MESSAGE_MAGIC,
+            DEVICE_MESSAGE_VERSION,
+            DEVICE_MSG_ACTUATOR_COMMAND,
+            WIRE_DEVICE_BODY.size,
+            sequence,
+            *values,
+            int(time.monotonic() * 1000) & 0xFFFFFFFF,
+        )
+        self.sock.sendto(message, gateway)
+        command = {
+            "seq": sequence,
+            "light_on": bool(values[0]),
+            "brightness": values[1],
+            "red": values[2],
+            "green": values[3],
+            "blue": values[4],
+            "buzzer_override": bool(values[5]),
+            "buzzer_on": bool(values[6]),
+            "energy_mode": mode_name,
+            "gateway": {"ip": gateway[0], "command_port": gateway[1]},
+        }
+        self.state.logs.info("network", "Comando enviado al gateway.", context=command)
+        return command
+
+    def stop(self):
+        self.stop_event.set()
+        if self.sock is not None:
+            self.sock.close()
+        if self.thread is not None:
+            self.thread.join(timeout=2)
 
 
 class DashboardHandler(SimpleHTTPRequestHandler):
     state = None
+    discovery = None
 
     def __init__(self, *args, directory=None, **kwargs):
         super().__init__(*args, directory=directory, **kwargs)
@@ -1605,13 +1875,14 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             try:
                 body = self.read_binary_body()
                 decoded = decode_udp_batch(body)
-                csi_count, sensor_count = publish_decoded_batch(self.state, decoded)
+                csi_count, sensor_count, actuator_count = publish_decoded_batch(self.state, decoded)
                 self.send_json(
                     {
                         "ok": True,
                         "frames": len(decoded),
                         "csi": csi_count,
                         "sensors": sensor_count,
+                        "actuators": actuator_count,
                     }
                 )
             except Exception as exc:
@@ -1627,9 +1898,19 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self.state.parse_errors = 0
                 self.state.latest = None
                 self.state.latest_sensor = None
+                self.state.latest_actuator = None
                 self.state.seq += 1
                 self.state.condition.notify_all()
             self.send_json({"ok": True})
+            return
+
+        if self.path == "/api/device/command":
+            try:
+                command = self.discovery.send_command(self.read_json_body())
+                self.send_json({"ok": True, "command": command})
+            except Exception as exc:
+                self.state.logs.error("http", "No se pudo enviar comando al dispositivo.", exc=exc)
+                self.send_json({"ok": False, "error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
             return
 
         if self.path == "/api/collection/start":
@@ -1651,6 +1932,18 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self.state.seq += 1
                 self.state.condition.notify_all()
             self.send_json({"ok": True, "completed": completed})
+            return
+
+        if self.path == "/api/collection/end-hold":
+            try:
+                completed = self.state.recorder.end_manual_hold()
+                with self.state.condition:
+                    self.state.seq += 1
+                    self.state.condition.notify_all()
+                self.send_json({"ok": True, "completed": completed})
+            except Exception as exc:
+                self.state.logs.error("http", "No se pudo finalizar la pausa manual.", exc=exc)
+                self.send_json({"ok": False, "error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
             return
 
         self.send_error(HTTPStatus.NOT_FOUND)
@@ -1777,6 +2070,7 @@ def main():
     parser.add_argument("--http-port", type=int, default=8080)
     parser.add_argument("--udp-host", default="0.0.0.0")
     parser.add_argument("--udp-port", type=int, default=5000)
+    parser.add_argument("--discovery-port", type=int, default=5001)
     parser.add_argument("--model-path", default=DEFAULT_MODEL_PATH)
     parser.add_argument("--log-dir", default=os.environ.get("CSI_WEB_LOG_DIR", str(Path(root) / DEFAULT_LOG_DIRNAME)))
     parser.add_argument("--inference-window-s", type=float, default=20.0)
@@ -1802,6 +2096,7 @@ def main():
             "http_port": args.http_port,
             "udp_host": args.udp_host,
             "udp_port": args.udp_port,
+            "discovery_port": args.discovery_port,
             "model_path": args.model_path,
             "telegram_configured": bool(args.telegram_bot_token and args.telegram_chat_id),
         },
@@ -1821,8 +2116,11 @@ def main():
         log_service=logs,
     )
     state = CsiState(base_dir, inference, notifier, logs, udp_port=args.udp_port)
-
+    discovery_server = DiscoveryCommandServer(
+        args.udp_host, args.discovery_port, args.udp_port, state
+    )
     DashboardHandler.state = state
+    DashboardHandler.discovery = discovery_server
 
     def handler(*handler_args, **handler_kwargs):
         return DashboardHandler(
@@ -1834,8 +2132,12 @@ def main():
     httpd = DashboardHTTPServer((args.host, args.http_port), handler)
     udp_server = UdpIngestServer(args.udp_host, args.udp_port, state)
     udp_server.start()
+    discovery_server.start()
+    local_hostname = socket.gethostname().split(".")[0]
     print(f"CSI dashboard: http://{args.host}:{args.http_port}")
+    print(f"Panel para el teléfono: http://{local_hostname}.local:{args.http_port}/usuario")
     print(f"CSI ingest: UDP {args.udp_host}:{args.udp_port}")
+    print(f"Gateway discovery: UDP {args.udp_host}:{args.discovery_port}")
     print(f"Model: {args.model_path}")
     print(f"Local env: {'loaded' if loaded_env else 'not found'} ({LOCAL_ENV_FILENAME})")
     print(f"Telegram alerts: {'enabled' if notifier.enabled else 'disabled'}")
@@ -1848,6 +2150,7 @@ def main():
         logs.info("startup", "Servidor detenido por teclado.")
     finally:
         state.recorder.stop("server_shutdown")
+        discovery_server.stop()
         udp_server.stop()
         httpd.server_close()
         logs.info("startup", "Servidor cerrado.")

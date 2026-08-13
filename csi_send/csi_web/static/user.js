@@ -15,8 +15,15 @@ const els = {
   sensorBadge: document.getElementById("sensorBadge"),
   temperatureValue: document.getElementById("temperatureValue"),
   soundValue: document.getElementById("soundValue"),
-  bpmValue: document.getElementById("bpmValue"),
   sensorNote: document.getElementById("sensorNote"),
+  deviceBadge: document.getElementById("deviceBadge"),
+  lightToggle: document.getElementById("lightToggle"),
+  brightnessInput: document.getElementById("brightnessInput"),
+  colorInput: document.getElementById("colorInput"),
+  energyMode: document.getElementById("energyMode"),
+  applyDeviceBtn: document.getElementById("applyDeviceBtn"),
+  lightOffBtn: document.getElementById("lightOffBtn"),
+  deviceNote: document.getElementById("deviceNote"),
   updatedAt: document.getElementById("updatedAt"),
 };
 
@@ -104,7 +111,6 @@ function updateSensors(sensor) {
     els.sensorBadge.textContent = "Esperando";
     els.temperatureValue.textContent = "--";
     els.soundValue.textContent = "--";
-    els.bpmValue.textContent = "--";
     els.sensorNote.textContent = "Aún no llegan lecturas desde los sensores del emisor.";
     return;
   }
@@ -112,7 +118,6 @@ function updateSensors(sensor) {
   const alerts = sensor.alerts || {};
   const labels = [];
   if (alerts.sound) labels.push("sonido");
-  if (alerts.bpm_high) labels.push("ritmo alto");
   if (alerts.temp_high) labels.push("temperatura alta");
   if (alerts.temp_low) labels.push("temperatura baja");
 
@@ -122,18 +127,79 @@ function updateSensors(sensor) {
     ? `${Number(sensor.temperature_c).toFixed(1)} °C`
     : "--";
   els.soundValue.textContent = sensor.sound_detected ? "Detectado" : "Normal";
-  els.bpmValue.textContent = hasNumber(sensor.bpm) ? `${Math.round(Number(sensor.bpm))} BPM` : "--";
   els.sensorNote.textContent = labels.length
     ? `Sensor con alerta: ${labels.join(", ")}.`
-    : "Lecturas de temperatura, sonido y ritmo disponibles.";
+    : "Lecturas de temperatura y sonido disponibles.";
+}
+
+function hexColorChannels(value) {
+  const color = String(value || "#ffb450").replace("#", "");
+  return {
+    red: Number.parseInt(color.slice(0, 2), 16) || 0,
+    green: Number.parseInt(color.slice(2, 4), 16) || 0,
+    blue: Number.parseInt(color.slice(4, 6), 16) || 0,
+  };
+}
+
+function updateDevice(snapshot) {
+  const gateway = snapshot.gateway;
+  const actuator = snapshot.latest_actuator;
+  els.deviceBadge.className = `sensor-badge ${gateway ? "ok" : ""}`;
+  els.deviceBadge.textContent = gateway ? "Gateway conectado" : "Buscando gateway";
+  els.applyDeviceBtn.disabled = !gateway;
+  els.lightOffBtn.disabled = !gateway;
+  if (!actuator) {
+    els.deviceNote.textContent = gateway
+      ? "Gateway encontrado; todavía no hay confirmación del nodo de actuadores."
+      : "El gateway debe estar conectado para enviar comandos.";
+    return;
+  }
+  els.lightToggle.checked = Boolean(actuator.light_on);
+  els.energyMode.value = actuator.energy_mode || "monitoring";
+  els.deviceNote.textContent =
+    `Confirmado: luz ${actuator.light_on ? "encendida" : "apagada"}, ` +
+    `modo ${actuator.energy_mode}, buzzer ${actuator.buzzer_on ? "activo" : "apagado"}.`;
+}
+
+async function sendDeviceCommand(overrides = {}) {
+  const color = hexColorChannels(els.colorInput.value);
+  const payload = {
+    light_on: els.lightToggle.checked,
+    brightness: Number(els.brightnessInput.value),
+    ...color,
+    buzzer_override: false,
+    buzzer_on: false,
+    energy_mode: els.energyMode.value,
+    ...overrides,
+  };
+  els.deviceNote.textContent = "Enviando comando…";
+  try {
+    const response = await fetch("/api/device/command", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const result = await response.json();
+    if (!response.ok || result.ok === false) throw new Error(result.error || `HTTP ${response.status}`);
+    els.deviceNote.textContent = "Comando enviado; esperando confirmación de la ESP32.";
+  } catch (error) {
+    els.deviceNote.textContent = `No se pudo enviar: ${error.message}`;
+  }
 }
 
 function render(snapshot) {
   updateConnection(snapshot.connected);
   updateInference(snapshot);
   updateSensors(snapshot.latest_sensor);
+  updateDevice(snapshot);
   els.updatedAt.textContent = snapshot.connected ? "Actualizado automáticamente" : "Esperando conexión";
 }
+
+els.applyDeviceBtn.addEventListener("click", () => sendDeviceCommand());
+els.lightOffBtn.addEventListener("click", () => {
+  els.lightToggle.checked = false;
+  sendDeviceCommand({ light_on: false });
+});
 
 async function refresh() {
   try {

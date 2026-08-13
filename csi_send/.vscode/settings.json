@@ -1,5 +1,5 @@
 {
     "idf.currentSetup": "/Users/jandonyggarofalo/Documents/Desa/UNI/programs/.espressif/v5.5.4/esp-idf",
-    "idf.port": "/dev/tty.usbserial-4",
+    "idf.port": "/dev/tty.usbserial-0001",
     "idf.flashType": "UART"
 }

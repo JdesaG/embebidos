@@ -76,9 +76,28 @@ def event_label_at(elapsed_s: float, session_label: str, events: list[dict]) -> 
     return session_label
 
 
-def load_session(raw_path: Path, metadata_path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def label_from_filename(raw_path: Path) -> str:
+    name = raw_path.stem
+    if "_hold_breath_off_" in name:
+        return "hold_breath_off"
+    if "_breathing_off_" in name:
+        return "breathing_off"
+    if "_empty_off_" in name:
+        return "empty_off"
+    if "_walking_between_off_" in name:
+        return "walking_between_off"
+    if "_ambient_on_people_" in name:
+        return "ambient_on_people"
+    return "unknown"
+
+
+def load_session(raw_path: Path, metadata_path: Path | None) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Return time, amplitude and binary/event labels for one raw session."""
-    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    metadata = (
+        json.loads(metadata_path.read_text(encoding="utf-8"))
+        if metadata_path is not None and metadata_path.exists()
+        else {"label": label_from_filename(raw_path), "events": []}
+    )
     events = metadata.get("events") or []
     times, amplitudes, labels = [], [], []
     with raw_path.open("r", encoding="utf-8", errors="replace", newline="") as fd:
@@ -91,7 +110,11 @@ def load_session(raw_path: Path, metadata_path: Path) -> tuple[np.ndarray, np.nd
                 amplitude = amplitude_from_data(parsed["data"])
                 times.append(elapsed_s)
                 amplitudes.append(amplitude)
-                labels.append(row.get("event_label") or event_label_at(elapsed_s, metadata["label"], events))
+                labels.append(
+                    row.get("event_label")
+                    or row.get("label")
+                    or event_label_at(elapsed_s, metadata["label"], events)
+                )
             except (KeyError, TypeError, ValueError, json.JSONDecodeError):
                 continue
     if not times:
@@ -154,7 +177,7 @@ def extract_features(matrix: np.ndarray, target_hz: float, respiratory_low_hz: f
     }
 
 
-def windows_from_session(raw_path: Path, metadata_path: Path, args: argparse.Namespace) -> tuple[list[list[float]], list[int], list[str]]:
+def windows_from_session(raw_path: Path, metadata_path: Path | None, args: argparse.Namespace) -> tuple[list[list[float]], list[int], list[str]]:
     times, amplitudes, labels = load_session(raw_path, metadata_path)
     features, targets, groups = [], [], []
     start = max(float(times.min()), args.stabilization_s)
@@ -209,6 +232,10 @@ def split_groups(groups: np.ndarray, targets: np.ndarray) -> tuple[np.ndarray, n
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train a dashboard-compatible CSI apnea model.")
     parser.add_argument("--base-dir", default=".")
+    parser.add_argument(
+        "--raw-dir",
+        help="Optional directory containing labeled CSV files. Event labels may be embedded in each CSV.",
+    )
     parser.add_argument("--month", default="202607", help="YYYYMM prefix to select raw sessions.")
     parser.add_argument("--output", default="models/apnea_model_july_2026.joblib")
     parser.add_argument("--report", default="data/reports/apnea_model_july_2026.json")
@@ -228,19 +255,22 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     base_dir = Path(args.base_dir).resolve()
-    raw_files = sorted((base_dir / "data" / "raw").glob(f"session_{args.month}*.csv"))
+    raw_dir = Path(args.raw_dir).expanduser().resolve() if args.raw_dir else base_dir / "data" / "raw"
+    raw_files = sorted(raw_dir.glob(f"session_{args.month}*.csv"))
     if not raw_files:
         raise SystemExit(f"No raw sessions found for month prefix {args.month}.")
 
     all_x, all_y, all_groups, skipped = [], [], [], []
     for raw_path in raw_files:
-        metadata_path = base_dir / "data" / "metadata" / f"{raw_path.stem}.json"
-        if not metadata_path.exists():
-            skipped.append({"file": raw_path.name, "reason": "metadata missing"})
-            continue
-        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-        if metadata.get("label") not in {"breathing_off", "hold_breath_off"}:
-            skipped.append({"file": raw_path.name, "reason": f"not a binary respiratory session ({metadata.get('label')})"})
+        metadata_candidate = base_dir / "data" / "metadata" / f"{raw_path.stem}.json"
+        metadata_path = metadata_candidate if metadata_candidate.exists() else None
+        session_label = (
+            json.loads(metadata_path.read_text(encoding="utf-8")).get("label")
+            if metadata_path is not None
+            else label_from_filename(raw_path)
+        )
+        if session_label not in {"breathing_off", "hold_breath_off"}:
+            skipped.append({"file": raw_path.name, "reason": f"not a binary respiratory session ({session_label})"})
             continue
         x, y, groups = windows_from_session(raw_path, metadata_path, args)
         all_x.extend(x)
@@ -268,7 +298,7 @@ def main() -> int:
     probabilities = candidate.predict_proba(X[test_mask])[:, 1]
     test_report = classification_report(y[test_mask], predicted, target_names=["breathing", "apnea"], output_dict=True, zero_division=0)
 
-    # The saved model is refit on every eligible July window after the held-out
+    # The saved model is refit on every eligible window after the held-out
     # measurement; the report makes that distinction explicit.
     final_pipeline = Pipeline([
         ("scaler", StandardScaler()),
@@ -289,6 +319,7 @@ def main() -> int:
         "classes": {"0": "breathing", "1": "apnea"},
         "training": {
             "source_month": args.month,
+            "source_raw_dir": str(raw_dir),
             "window_s": args.window_s,
             "stride_s": args.stride_s,
             "target_hz": args.target_hz,
@@ -305,6 +336,7 @@ def main() -> int:
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "model_file": str(output_path.relative_to(base_dir)),
         "source_month": args.month,
+        "source_raw_dir": str(raw_dir),
         "eligible_sessions": sorted(set(groups)),
         "skipped_sessions": skipped,
         "features": FEATURES,
@@ -317,7 +349,7 @@ def main() -> int:
             "classification_report": test_report,
             "apnea_probability_mean": round(float(probabilities.mean()), 4),
         },
-        "saved_model_training": "Refit on all eligible July windows after held-out evaluation.",
+        "saved_model_training": "Refit on all eligible windows after held-out evaluation.",
         "limitations": [
             "This is a simulated breath-hold detector, not a medical device or diagnostic tool.",
             "Windows from the active-environment session were excluded because its label is not normal breathing.",

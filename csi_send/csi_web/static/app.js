@@ -54,6 +54,8 @@ const els = {
   presetButtons: document.getElementById("presetButtons"),
   collectionProgress: document.getElementById("collectionProgress"),
   stopCollectionBtn: document.getElementById("stopCollectionBtn"),
+  manualHoldAction: document.getElementById("manualHoldAction"),
+  endHoldBtn: document.getElementById("endHoldBtn"),
   collectionDetail: document.getElementById("collectionDetail"),
   protocolClock: document.getElementById("protocolClock"),
   protocolPhase: document.getElementById("protocolPhase"),
@@ -79,6 +81,7 @@ const els = {
   inferenceLatency: document.getElementById("inferenceLatency"),
   inferenceLastRun: document.getElementById("inferenceLastRun"),
   modelDebugDecision: document.getElementById("modelDebugDecision"),
+  modelDecisionNote: document.getElementById("modelDecisionNote"),
   modelSignalCanvas: document.getElementById("modelSignalCanvas"),
   modelProbabilityCanvas: document.getElementById("modelProbabilityCanvas"),
   modelFeatures: document.getElementById("modelFeatures"),
@@ -90,7 +93,6 @@ const els = {
   sensorDetail: document.getElementById("sensorDetail"),
   sensorLastUpdate: document.getElementById("sensorLastUpdate"),
   sensorTemp: document.getElementById("sensorTemp"),
-  sensorBpm: document.getElementById("sensorBpm"),
   sensorSound: document.getElementById("sensorSound"),
   sensorBuzzer: document.getElementById("sensorBuzzer"),
   sensorPacketCount: document.getElementById("sensorPacketCount"),
@@ -104,7 +106,7 @@ const els = {
 const presetTitles = {
   empty_off: "Cuarto vacío",
   breathing_off: "Respiración",
-  hold_breath_off: "Apnea",
+  hold_breath_off: "Pausa manual",
   walking_between_off: "Caminando",
   ambient_on_people: "Ambiente activo"
 };
@@ -159,7 +161,7 @@ function displayLabel(label) {
 
 function displayPhaseLabel(label) {
   if (label === "breathing") return "Respiración normal";
-  if (label === "hold_breath") return "Apnea simulada";
+  if (label === "hold_breath") return "Pausa respiratoria";
   if (label === "waiting") return "Preparación";
   return displayLabel(label);
 }
@@ -246,7 +248,9 @@ function renderPresetButtons(presets) {
     title.textContent = displayLabel(label);
 
     const detail = document.createElement("span");
-    detail.textContent = `${formatSeconds(preset.duration_s)} | ${preset.description || ""}`;
+    detail.textContent = preset.manual_hold
+      ? `${formatSeconds(preset.manual_hold_start_s)} respirando + pausa hasta pulsar el botón`
+      : `${formatSeconds(preset.duration_s)} | ${preset.description || ""}`;
 
     button.append(title, detail);
     button.addEventListener("click", () => startCollection(label));
@@ -256,7 +260,13 @@ function renderPresetButtons(presets) {
 
 function applyPresetToForm(label) {
   const preset = state.presets[label] || {};
-  if (!state.durationTouched && preset.duration_s) {
+  if (preset.manual_hold && preset.duration_s) {
+    els.durationInput.value = Math.round(preset.duration_s);
+    els.durationInput.disabled = true;
+  } else {
+    els.durationInput.disabled = false;
+  }
+  if (!preset.manual_hold && !state.durationTouched && preset.duration_s) {
     els.durationInput.value = Math.round(preset.duration_s);
   }
   if (preset.person_position) {
@@ -302,9 +312,22 @@ async function startCollection(label) {
     els.collectionDetail.textContent = "Preparando archivo CSV y metadatos...";
     const result = await postJson("/api/collection/start", buildCollectionPayload(label));
     updateCollection(result.collection);
-    phaseAlarm();
   } catch (error) {
     setCollectionError(error.message);
+  }
+}
+
+async function endManualHold() {
+  try {
+    els.endHoldBtn.disabled = true;
+    els.endHoldBtn.textContent = "Guardando pausa...";
+    els.collectionStatus.textContent = "Finalizando pausa";
+    const result = await postJson("/api/collection/end-hold");
+    updateCollection({ active: false, last_completed: result.completed, presets: state.presets });
+  } catch (error) {
+    els.endHoldBtn.textContent = "Terminé la pausa — guardar y volver a respirar";
+    setCollectionError(error.message);
+    updateCollection(state.collection);
   }
 }
 
@@ -334,27 +357,50 @@ function updateCollection(collection) {
     button.classList.toggle("recording", active && button.dataset.label === collection.label);
   });
   els.stopCollectionBtn.disabled = !active;
+  els.stopCollectionBtn.textContent = active && collection.manual_hold ? "Cancelar prueba" : "Detener";
+  const showManualHoldAction = Boolean(active && collection.manual_hold);
+  els.manualHoldAction.hidden = !showManualHoldAction;
+  els.endHoldBtn.disabled = !Boolean(collection.can_end_hold);
+  els.endHoldBtn.textContent = collection.hold_started
+    ? "Terminé la pausa — guardar y volver a respirar"
+    : `Disponible después de la alarma (${formatDurationClock(collection.manual_hold_start_s)})`;
 
   if (active) {
     const progress = clamp(collection.progress || 0, 0, 1);
     els.collectionStatus.textContent = `Grabando ${displayLabel(collection.label)}`;
     els.collectionProgress.style.width = `${(progress * 100).toFixed(1)}%`;
-    els.collectionDetail.textContent =
-      `Evento: ${collection.event_label} | ` +
-      `${formatSeconds(collection.elapsed_s)} / ${formatSeconds(collection.duration_s)} | ` +
-      `${collection.samples_collected} muestras | ${collection.raw_file}`;
+    if (collection.manual_hold && collection.hold_started) {
+      els.collectionDetail.textContent =
+        `Pausa: ${formatSeconds(collection.hold_elapsed_s)} | ` +
+        `pulsa el botón antes de respirar | ${collection.samples_collected} muestras | ${collection.raw_file}`;
+    } else if (collection.manual_hold) {
+      const alarmIn = Math.max(0, Number(collection.manual_hold_start_s) - Number(collection.elapsed_s));
+      els.collectionDetail.textContent =
+        `Respiración normal | alarma en ${formatSeconds(alarmIn)} | ` +
+        `${collection.samples_collected} muestras | ${collection.raw_file}`;
+    } else {
+      els.collectionDetail.textContent =
+        `Evento: ${collection.event_label} | ` +
+        `${formatSeconds(collection.elapsed_s)} / ${formatSeconds(collection.duration_s)} | ` +
+        `${collection.samples_collected} muestras | ${collection.raw_file}`;
+    }
     return;
   }
 
+  els.durationInput.disabled = false;
+  els.manualHoldAction.hidden = true;
   els.collectionStatus.textContent = "Sin sesión activa";
   els.collectionProgress.style.width = "0%";
 
   if (collection.last_completed) {
     const completed = collection.last_completed;
+    const holdSummary = completed.stop_reason === "participant_ended_hold"
+      ? ` | pausa ${formatSeconds(completed.hold_duration_s)}`
+      : "";
     els.collectionDetail.textContent =
       `Última sesión: ${displayLabel(completed.label)} | ` +
       `${completed.samples_collected} muestras | ` +
-      `${completed.sample_rate_estimated_hz} Hz | ` +
+      `${completed.sample_rate_estimated_hz} Hz${holdSummary} | ` +
       `${completed.raw_file}`;
   } else {
     els.collectionDetail.textContent =
@@ -383,16 +429,24 @@ function renderProtocolClock(collection) {
   els.protocolClock.className = `protocol-clock ${className}`;
   els.protocolPhase.textContent = displayPhaseLabel(phaseLabel);
   els.protocolStart.textContent = formatClock(collection.started_at);
-  els.protocolElapsed.textContent = `${formatDurationClock(collection.elapsed_s)} / ${formatDurationClock(collection.duration_s)}`;
+  els.protocolElapsed.textContent = collection.manual_hold
+    ? formatDurationClock(collection.elapsed_s)
+    : `${formatDurationClock(collection.elapsed_s)} / ${formatDurationClock(collection.duration_s)}`;
   const phaseDuration = schedule.phase_end_s === null || schedule.phase_end_s === undefined
     ? null
     : Number(schedule.phase_end_s) - Number(schedule.phase_start_s || 0);
-  els.protocolPhaseRemaining.textContent = schedule.phase_remaining_s === null || phaseDuration === null
-    ? "--"
-    : `${formatDurationClock(schedule.phase_elapsed_s)} / ${formatDurationClock(phaseDuration)}`;
-  els.protocolNext.textContent = schedule.next_phase_label
-    ? `${displayPhaseLabel(schedule.next_phase_label)} en ${formatDurationClock(schedule.phase_remaining_s)}`
-    : "Fin del protocolo";
+  els.protocolPhaseRemaining.textContent = collection.manual_hold && collection.hold_started
+    ? formatDurationClock(collection.hold_elapsed_s)
+    : schedule.phase_remaining_s === null || phaseDuration === null
+      ? "--"
+      : `${formatDurationClock(schedule.phase_elapsed_s)} / ${formatDurationClock(phaseDuration)}`;
+  els.protocolNext.textContent = collection.manual_hold
+    ? collection.hold_started
+      ? "Pulsa el botón antes de respirar"
+      : `Alarma e inicio de pausa en ${formatDurationClock(schedule.phase_remaining_s)}`
+    : schedule.next_phase_label
+      ? `${displayPhaseLabel(schedule.next_phase_label)} en ${formatDurationClock(schedule.phase_remaining_s)}`
+      : "Fin del protocolo";
 
   const events = collection.events && collection.events.length
     ? collection.events
@@ -407,8 +461,9 @@ function renderProtocolClock(collection) {
     const phaseClass = event.label === "hold_breath" ? "apnea" : "";
     const active = index === Number(schedule.phase_index) ? "active" : "";
     const start = formatDurationClock(event.start_s);
-    const end = formatDurationClock(event.end_s);
-    const duration = formatDurationClock(Number(event.end_s) - Number(event.start_s));
+    const manualEnd = collection.manual_hold && event.label === "hold_breath";
+    const end = manualEnd ? "botón" : formatDurationClock(event.end_s);
+    const duration = manualEnd ? "duración voluntaria" : formatDurationClock(Number(event.end_s) - Number(event.start_s));
     return `<div class="protocol-schedule-row ${phaseClass} ${active}">
       <span>${start}–${end}</span>
       <strong>${displayPhaseLabel(event.label)}</strong>
@@ -417,9 +472,11 @@ function renderProtocolClock(collection) {
   }).join("");
 
   if (phaseLabel === "hold_breath") {
-    els.protocolInstruction.textContent = "Apnea simulada: mantén la pausa indicada y detén la prueba si sientes incomodidad.";
+    els.protocolInstruction.textContent = "Mantén únicamente una pausa voluntaria. Pulsa el botón justo antes de volver a respirar; no existe un tiempo obligatorio.";
   } else if (phaseLabel === "breathing") {
-    els.protocolInstruction.textContent = "Respira con normalidad, permanece quieto y espera la próxima alarma.";
+    els.protocolInstruction.textContent = collection.manual_hold
+      ? "Respira con normalidad durante 60 segundos. Cuando suene la alarma, inicia la pausa voluntaria."
+      : "Respira con normalidad, permanece quieto y espera la próxima alarma.";
   } else {
     els.protocolInstruction.textContent = "Preparando el siguiente intervalo.";
   }
@@ -504,9 +561,13 @@ function updateInference(inference) {
   }
 
   const score = inference.model_score;
-  els.modelDebugDecision.textContent = score === null || score === undefined
-    ? "Esperando inferencia"
-    : `score ${Number(score).toFixed(3)} | umbral 0.000`;
+  const decisionThreshold = Number(inference.decision_threshold ?? 0.5);
+  els.modelDebugDecision.textContent = inference.apnea_probability === null || inference.apnea_probability === undefined
+    ? score === null || score === undefined
+      ? "Esperando inferencia"
+      : `score ${Number(score).toFixed(3)}`
+    : `prob. ${Number(inference.apnea_probability).toFixed(3)} | umbral ${decisionThreshold.toFixed(2)}`;
+  els.modelDecisionNote.textContent = `La línea punteada representa el umbral de decisión ${decisionThreshold.toFixed(2)}.`;
 
   const features = inference.features || {};
   const zscores = inference.feature_zscores || {};
@@ -542,7 +603,6 @@ function updateSensors(sensor, packetCount = 0) {
     els.sensorDetail.textContent = "La ESP emisora aun no envia SENSOR_DATA al receptor.";
     els.sensorLastUpdate.textContent = "Esperando SENSOR_DATA";
     els.sensorTemp.textContent = "-- C";
-    els.sensorBpm.textContent = "--";
     els.sensorSound.textContent = "--";
     els.sensorBuzzer.textContent = "--";
     els.sensorUptime.textContent = "--";
@@ -553,7 +613,6 @@ function updateSensors(sensor, packetCount = 0) {
   const alerts = sensor.alerts || {};
   const activeAlerts = [];
   if (alerts.sound) activeAlerts.push("sonido");
-  if (alerts.bpm_high) activeAlerts.push("BPM alto");
   if (alerts.temp_high) activeAlerts.push("temperatura alta");
   if (alerts.temp_low) activeAlerts.push("temperatura baja");
 
@@ -563,13 +622,12 @@ function updateSensors(sensor, packetCount = 0) {
   els.sensorLabel.textContent = sensor.has_alert ? "Alerta activa" : "Sensores normales";
   els.sensorDetail.textContent = activeAlerts.length
     ? `Detectado: ${activeAlerts.join(", ")}.`
-    : "Temperatura, BPM y sonido dentro del estado esperado.";
+    : "Temperatura y sonido dentro del estado esperado.";
   els.sensorLastUpdate.textContent = `Ultima lectura ${formatClock(sensor.time ? sensor.time * 1000 : null)}`;
   els.sensorTemp.textContent =
     sensor.temperature_c === null || sensor.temperature_c === undefined
       ? "-- C"
       : `${Number(sensor.temperature_c).toFixed(1)} C`;
-  els.sensorBpm.textContent = String(sensor.bpm ?? "--");
   els.sensorSound.textContent = sensor.sound_detected ? "Detectado" : "Normal";
   els.sensorBuzzer.textContent =
     sensor.buzzer_interval_ms > 0
@@ -724,7 +782,8 @@ function drawModelProbability() {
   const top = 12;
   const plotWidth = width - 54;
   const plotHeight = height - 42;
-  const thresholdY = top + (1 - 0.5) * plotHeight;
+  const threshold = clamp(Number(state.inference?.decision_threshold ?? 0.5), 0, 1);
+  const thresholdY = top + (1 - threshold) * plotHeight;
 
   ctx.setLineDash([6, 5]);
   ctx.strokeStyle = "#f2bc57";
@@ -948,6 +1007,7 @@ els.durationInput.addEventListener("input", () => {
 });
 
 els.stopCollectionBtn.addEventListener("click", stopCollection);
+els.endHoldBtn.addEventListener("click", endManualHold);
 
 els.alarmToggle.addEventListener("change", () => {
   if (els.alarmToggle.checked) ensureAudio();

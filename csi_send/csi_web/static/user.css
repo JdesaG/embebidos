@@ -326,6 +326,67 @@ h2 {
   color: var(--alert);
 }
 
+.control-row {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr 1fr;
+  margin: 18px 0;
+}
+
+.control-row label {
+  color: var(--muted);
+  display: grid;
+  font-size: 13px;
+  font-weight: 700;
+  gap: 7px;
+}
+
+.control-row input,
+.control-row select {
+  min-height: 38px;
+  width: 100%;
+}
+
+.switch-row {
+  align-items: center;
+  background: var(--rose-50);
+  border-radius: 14px;
+  grid-template-columns: 1fr auto;
+  padding: 10px 12px;
+}
+
+.switch-row input {
+  min-height: 24px;
+  width: 24px;
+}
+
+.button-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.button-row button {
+  background: var(--melon-dark);
+  border: 0;
+  border-radius: 12px;
+  color: white;
+  flex: 1;
+  font: inherit;
+  font-weight: 800;
+  padding: 12px;
+}
+
+.button-row button.secondary {
+  background: var(--rose-100);
+  color: var(--ink);
+}
+
+.button-row button:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
+
 .notice {
   background: #fffafb;
   box-shadow: none;

@@ -454,6 +454,39 @@ h2 {
   line-height: 1.45;
 }
 
+.manual-hold-action {
+  background: rgba(255, 107, 95, 0.08);
+  border: 1px solid rgba(255, 107, 95, 0.65);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+
+.manual-hold-action[hidden] {
+  display: none;
+}
+
+.manual-hold-action button {
+  background: var(--red);
+  border-color: #ff8d85;
+  color: #171717;
+  font-size: 17px;
+  min-height: 58px;
+}
+
+.manual-hold-action button:disabled {
+  background: #352323;
+  color: var(--muted);
+}
+
+.manual-hold-action p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: center;
+}
+
 .inference-panel {
   border-color: var(--line);
 }

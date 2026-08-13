@@ -1,0 +1,577 @@
+{
+  "generated_at": "2026-08-12T15:41:19+00:00",
+  "source_files": [
+    "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_092121_breathing_off_breathing_off.csv",
+    "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_092928_breathing_off_breathing_off.csv",
+    "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_093242_breathing_off_breathing_off.csv",
+    "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_093811_breathing_off_breathing_off.csv",
+    "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_094151_breathing_off_breathing_off.csv",
+    "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_094454_breathing_off_breathing_off.csv",
+    "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_094809_breathing_off_breathing_off.csv",
+    "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_095153_hold_breath_off_hold_breath_off.csv",
+    "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_095800_hold_breath_off_hold_breath_off.csv",
+    "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_100509_hold_breath_off_hold_breath_off.csv",
+    "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_101142_hold_breath_off_hold_breath_off.csv"
+  ],
+  "source_files_unchanged": true,
+  "parameters": {
+    "files": [
+      "csi_send/data/raw/session_20260812_092121_breathing_off_breathing_off.csv",
+      "csi_send/data/raw/session_20260812_092928_breathing_off_breathing_off.csv",
+      "csi_send/data/raw/session_20260812_093242_breathing_off_breathing_off.csv",
+      "csi_send/data/raw/session_20260812_093811_breathing_off_breathing_off.csv",
+      "csi_send/data/raw/session_20260812_094151_breathing_off_breathing_off.csv",
+      "csi_send/data/raw/session_20260812_094454_breathing_off_breathing_off.csv",
+      "csi_send/data/raw/session_20260812_094809_breathing_off_breathing_off.csv",
+      "csi_send/data/raw/session_20260812_095153_hold_breath_off_hold_breath_off.csv",
+      "csi_send/data/raw/session_20260812_095800_hold_breath_off_hold_breath_off.csv",
+      "csi_send/data/raw/session_20260812_100509_hold_breath_off_hold_breath_off.csv",
+      "csi_send/data/raw/session_20260812_101142_hold_breath_off_hold_breath_off.csv"
+    ],
+    "base_dir": "csi_send",
+    "output_dir": "data/filtered/respiratory_20260812_q25",
+    "window_s": 8.0,
+    "stride_s": 2.0,
+    "target_hz": 50.0,
+    "stabilization_s": 10.0,
+    "transition_guard_s": 2.0,
+    "max_gap_s": 0.1,
+    "min_sample_ratio": 0.8,
+    "outlier_mad_z": 6.0,
+    "max_clip_fraction": 0.02,
+    "breathing_quantile": 0.25,
+    "respiratory_low_hz": 0.1,
+    "respiratory_high_hz": 0.5
+  },
+  "filters": [
+    "valid parseable CSI with a consistent even payload length per session",
+    "initial stabilization exclusion",
+    "100% label purity and transition guard",
+    "minimum sample coverage",
+    "maximum inter-sample time gap",
+    "per-subcarrier median/MAD spike winsorization",
+    "maximum clipped-amplitude fraction",
+    "valid active-subcarrier/PCA/respiratory feature extraction",
+    "conservative exclusion of hold windows whose activity matches session breathing baseline"
+  ],
+  "candidate_windows": 1236,
+  "quality_counts": {
+    "insufficient_samples": 140,
+    "accepted": 741,
+    "time_gap": 214,
+    "no_samples": 11,
+    "too_many_amplitude_outliers": 30,
+    "transition_guard": 42,
+    "mixed_or_unknown_label": 58
+  },
+  "confidence_counts": {
+    "trusted_breathing": 558,
+    "ambiguous_breathing_evidence": 139,
+    "high_confidence_hold": 44
+  },
+  "final_windows": {
+    "total": 602,
+    "breathing": 558,
+    "hold_breath": 44
+  },
+  "session_summaries": [
+    {
+      "source_file": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_092121_breathing_off_breathing_off.csv",
+      "metadata": {
+        "session_id": "session_20260812_092121_breathing_off",
+        "label": "breathing_off",
+        "duration_s": 332.607,
+        "requested_duration_s": 180.0,
+        "description": "Persona quieta respirando normal en medio de las ESP32.",
+        "tx_position": "",
+        "rx_position": "",
+        "distance_cm": "",
+        "height_cm": "",
+        "environment": "off",
+        "person_position": "between_tx_rx",
+        "notes": "",
+        "events": [],
+        "started_at": "2026-08-12T14:21:21.960+00:00",
+        "ended_at": "2026-08-12T14:26:54.563+00:00",
+        "raw_file": "data/raw/session_20260812_092121_breathing_off_breathing_off.csv",
+        "metadata_file": "data/metadata/session_20260812_092121_breathing_off_breathing_off.json",
+        "samples_collected": 11880,
+        "corrupt_lines": 0,
+        "sample_rate_estimated_hz": 35.718,
+        "stop_reason": "server_shutdown"
+      },
+      "valid_rows": 11880,
+      "payload_lengths": {
+        "256": 11880
+      },
+      "data_start_s": 0.001223,
+      "data_end_s": 153.959174,
+      "breathing_activity_threshold": 1.7560813217863465
+    },
+    {
+      "source_file": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_092928_breathing_off_breathing_off.csv",
+      "metadata": {
+        "session_id": "session_20260812_092928_breathing_off",
+        "label": "breathing_off",
+        "duration_s": 180.0,
+        "requested_duration_s": 180.0,
+        "description": "Persona quieta respirando normal en medio de las ESP32.",
+        "tx_position": "",
+        "rx_position": "",
+        "distance_cm": "",
+        "height_cm": "",
+        "environment": "off",
+        "person_position": "between_tx_rx",
+        "notes": "",
+        "events": [],
+        "started_at": "2026-08-12T14:29:28.917+00:00",
+        "ended_at": "2026-08-12T14:32:28.916+00:00",
+        "raw_file": "data/raw/session_20260812_092928_breathing_off_breathing_off.csv",
+        "metadata_file": "data/metadata/session_20260812_092928_breathing_off_breathing_off.json",
+        "samples_collected": 13211,
+        "corrupt_lines": 0,
+        "sample_rate_estimated_hz": 73.394,
+        "stop_reason": "duration_complete"
+      },
+      "valid_rows": 13211,
+      "payload_lengths": {
+        "256": 13211
+      },
+      "data_start_s": 0.00181,
+      "data_end_s": 179.998616,
+      "breathing_activity_threshold": 1.4546973048005813
+    },
+    {
+      "source_file": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_093242_breathing_off_breathing_off.csv",
+      "metadata": {
+        "session_id": "session_20260812_093242_breathing_off",
+        "label": "breathing_off",
+        "duration_s": 180.004,
+        "requested_duration_s": 180.0,
+        "description": "Persona quieta respirando normal en medio de las ESP32.",
+        "tx_position": "",
+        "rx_position": "",
+        "distance_cm": "",
+        "height_cm": "",
+        "environment": "off",
+        "person_position": "between_tx_rx",
+        "notes": "",
+        "events": [],
+        "started_at": "2026-08-12T14:32:42.053+00:00",
+        "ended_at": "2026-08-12T14:37:21.689+00:00",
+        "raw_file": "data/raw/session_20260812_093242_breathing_off_breathing_off.csv",
+        "metadata_file": "data/metadata/session_20260812_093242_breathing_off_breathing_off.json",
+        "samples_collected": 16790,
+        "corrupt_lines": 0,
+        "sample_rate_estimated_hz": 93.275,
+        "stop_reason": "duration_complete"
+      },
+      "valid_rows": 16790,
+      "payload_lengths": {
+        "256": 16790
+      },
+      "data_start_s": 0.003683,
+      "data_end_s": 179.999167,
+      "breathing_activity_threshold": 1.399814488331797
+    },
+    {
+      "source_file": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_093811_breathing_off_breathing_off.csv",
+      "metadata": {
+        "session_id": "session_20260812_093811_breathing_off",
+        "label": "breathing_off",
+        "duration_s": 183.119,
+        "requested_duration_s": 180.0,
+        "description": "Persona quieta respirando normal en medio de las ESP32.",
+        "tx_position": "",
+        "rx_position": "",
+        "distance_cm": "",
+        "height_cm": "",
+        "environment": "off",
+        "person_position": "between_tx_rx",
+        "notes": "",
+        "events": [],
+        "started_at": "2026-08-12T14:38:11.536+00:00",
+        "ended_at": "2026-08-12T14:41:42.123+00:00",
+        "raw_file": "data/raw/session_20260812_093811_breathing_off_breathing_off.csv",
+        "metadata_file": "data/metadata/session_20260812_093811_breathing_off_breathing_off.json",
+        "samples_collected": 15969,
+        "corrupt_lines": 0,
+        "sample_rate_estimated_hz": 87.206,
+        "stop_reason": "duration_complete"
+      },
+      "valid_rows": 15969,
+      "payload_lengths": {
+        "256": 15969
+      },
+      "data_start_s": 3.552786,
+      "data_end_s": 177.514523,
+      "breathing_activity_threshold": 1.3829554527813726
+    },
+    {
+      "source_file": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_094151_breathing_off_breathing_off.csv",
+      "metadata": {
+        "session_id": "session_20260812_094151_breathing_off",
+        "label": "breathing_off",
+        "duration_s": 180.006,
+        "requested_duration_s": 180.0,
+        "description": "Persona quieta respirando normal en medio de las ESP32.",
+        "tx_position": "",
+        "rx_position": "",
+        "distance_cm": "",
+        "height_cm": "",
+        "environment": "off",
+        "person_position": "between_tx_rx",
+        "notes": "",
+        "events": [],
+        "started_at": "2026-08-12T14:41:51.818+00:00",
+        "ended_at": "2026-08-12T14:44:51.822+00:00",
+        "raw_file": "data/raw/session_20260812_094151_breathing_off_breathing_off.csv",
+        "metadata_file": "data/metadata/session_20260812_094151_breathing_off_breathing_off.json",
+        "samples_collected": 16072,
+        "corrupt_lines": 0,
+        "sample_rate_estimated_hz": 89.286,
+        "stop_reason": "duration_complete"
+      },
+      "valid_rows": 16072,
+      "payload_lengths": {
+        "256": 16072
+      },
+      "data_start_s": 0.001435,
+      "data_end_s": 179.996503,
+      "breathing_activity_threshold": 1.2951216689382128
+    },
+    {
+      "source_file": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_094454_breathing_off_breathing_off.csv",
+      "metadata": {
+        "session_id": "session_20260812_094454_breathing_off",
+        "label": "breathing_off",
+        "duration_s": 180.596,
+        "requested_duration_s": 180.0,
+        "description": "Persona quieta respirando normal en medio de las ESP32.",
+        "tx_position": "",
+        "rx_position": "",
+        "distance_cm": "",
+        "height_cm": "",
+        "environment": "off",
+        "person_position": "between_tx_rx",
+        "notes": "",
+        "events": [],
+        "started_at": "2026-08-12T14:44:54.187+00:00",
+        "ended_at": "2026-08-12T14:47:57.455+00:00",
+        "raw_file": "data/raw/session_20260812_094454_breathing_off_breathing_off.csv",
+        "metadata_file": "data/metadata/session_20260812_094454_breathing_off_breathing_off.json",
+        "samples_collected": 16391,
+        "corrupt_lines": 0,
+        "sample_rate_estimated_hz": 90.761,
+        "stop_reason": "duration_complete"
+      },
+      "valid_rows": 16391,
+      "payload_lengths": {
+        "256": 16391
+      },
+      "data_start_s": 0.001058,
+      "data_end_s": 176.178147,
+      "breathing_activity_threshold": 1.3785276679545784
+    },
+    {
+      "source_file": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_094809_breathing_off_breathing_off.csv",
+      "metadata": {
+        "session_id": "session_20260812_094809_breathing_off",
+        "label": "breathing_off",
+        "duration_s": 180.008,
+        "requested_duration_s": 180.0,
+        "description": "Persona quieta respirando normal en medio de las ESP32.",
+        "tx_position": "",
+        "rx_position": "",
+        "distance_cm": "",
+        "height_cm": "",
+        "environment": "off",
+        "person_position": "between_tx_rx",
+        "notes": "",
+        "events": [],
+        "started_at": "2026-08-12T14:48:09.554+00:00",
+        "ended_at": "2026-08-12T14:51:10.769+00:00",
+        "raw_file": "data/raw/session_20260812_094809_breathing_off_breathing_off.csv",
+        "metadata_file": "data/metadata/session_20260812_094809_breathing_off_breathing_off.json",
+        "samples_collected": 15440,
+        "corrupt_lines": 0,
+        "sample_rate_estimated_hz": 85.774,
+        "stop_reason": "duration_complete"
+      },
+      "valid_rows": 15440,
+      "payload_lengths": {
+        "256": 15440
+      },
+      "data_start_s": 2.940666,
+      "data_end_s": 179.999726,
+      "breathing_activity_threshold": 1.076034658747342
+    },
+    {
+      "source_file": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_095153_hold_breath_off_hold_breath_off.csv",
+      "metadata": {
+        "session_id": "session_20260812_095153_hold_breath_off",
+        "label": "hold_breath_off",
+        "duration_s": 360.008,
+        "requested_duration_s": 360.0,
+        "description": "Muñeco respirando y detenido por ciclos balanceados de 60 s.",
+        "tx_position": "",
+        "rx_position": "",
+        "distance_cm": "",
+        "height_cm": "",
+        "environment": "off",
+        "person_position": "between_tx_rx",
+        "notes": "",
+        "events": [
+          {
+            "start_s": 0.0,
+            "end_s": 60.0,
+            "label": "breathing"
+          },
+          {
+            "start_s": 60.0,
+            "end_s": 120.0,
+            "label": "hold_breath"
+          },
+          {
+            "start_s": 120.0,
+            "end_s": 180.0,
+            "label": "breathing"
+          },
+          {
+            "start_s": 180.0,
+            "end_s": 240.0,
+            "label": "hold_breath"
+          },
+          {
+            "start_s": 240.0,
+            "end_s": 300.0,
+            "label": "breathing"
+          },
+          {
+            "start_s": 300.0,
+            "end_s": 360.0,
+            "label": "hold_breath"
+          }
+        ],
+        "started_at": "2026-08-12T14:51:53.849+00:00",
+        "ended_at": "2026-08-12T14:57:53.903+00:00",
+        "raw_file": "data/raw/session_20260812_095153_hold_breath_off_hold_breath_off.csv",
+        "metadata_file": "data/metadata/session_20260812_095153_hold_breath_off_hold_breath_off.json",
+        "samples_collected": 29318,
+        "corrupt_lines": 0,
+        "sample_rate_estimated_hz": 81.437,
+        "stop_reason": "duration_complete"
+      },
+      "valid_rows": 29318,
+      "payload_lengths": {
+        "256": 29318
+      },
+      "data_start_s": 0.001964,
+      "data_end_s": 359.998854,
+      "breathing_activity_threshold": 1.2808106090627125
+    },
+    {
+      "source_file": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_095800_hold_breath_off_hold_breath_off.csv",
+      "metadata": {
+        "session_id": "session_20260812_095800_hold_breath_off",
+        "label": "hold_breath_off",
+        "duration_s": 363.944,
+        "requested_duration_s": 360.0,
+        "description": "Muñeco respirando y detenido por ciclos balanceados de 60 s.",
+        "tx_position": "",
+        "rx_position": "",
+        "distance_cm": "",
+        "height_cm": "",
+        "environment": "off",
+        "person_position": "between_tx_rx",
+        "notes": "",
+        "events": [
+          {
+            "start_s": 0.0,
+            "end_s": 60.0,
+            "label": "breathing"
+          },
+          {
+            "start_s": 60.0,
+            "end_s": 120.0,
+            "label": "hold_breath"
+          },
+          {
+            "start_s": 120.0,
+            "end_s": 180.0,
+            "label": "breathing"
+          },
+          {
+            "start_s": 180.0,
+            "end_s": 240.0,
+            "label": "hold_breath"
+          },
+          {
+            "start_s": 240.0,
+            "end_s": 300.0,
+            "label": "breathing"
+          },
+          {
+            "start_s": 300.0,
+            "end_s": 360.0,
+            "label": "hold_breath"
+          }
+        ],
+        "started_at": "2026-08-12T14:58:00.544+00:00",
+        "ended_at": "2026-08-12T15:04:04.487+00:00",
+        "raw_file": "data/raw/session_20260812_095800_hold_breath_off_hold_breath_off.csv",
+        "metadata_file": "data/metadata/session_20260812_095800_hold_breath_off_hold_breath_off.json",
+        "samples_collected": 23344,
+        "corrupt_lines": 0,
+        "sample_rate_estimated_hz": 64.142,
+        "stop_reason": "duration_complete"
+      },
+      "valid_rows": 23344,
+      "payload_lengths": {
+        "256": 23344
+      },
+      "data_start_s": 0.007015,
+      "data_end_s": 359.699478,
+      "breathing_activity_threshold": 1.2601761594961116
+    },
+    {
+      "source_file": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_100509_hold_breath_off_hold_breath_off.csv",
+      "metadata": {
+        "session_id": "session_20260812_100509_hold_breath_off",
+        "label": "hold_breath_off",
+        "duration_s": 360.016,
+        "requested_duration_s": 360.0,
+        "description": "Muñeco respirando y detenido por ciclos balanceados de 60 s.",
+        "tx_position": "",
+        "rx_position": "",
+        "distance_cm": "",
+        "height_cm": "",
+        "environment": "off",
+        "person_position": "between_tx_rx",
+        "notes": "",
+        "events": [
+          {
+            "start_s": 0.0,
+            "end_s": 60.0,
+            "label": "breathing"
+          },
+          {
+            "start_s": 60.0,
+            "end_s": 120.0,
+            "label": "hold_breath"
+          },
+          {
+            "start_s": 120.0,
+            "end_s": 180.0,
+            "label": "breathing"
+          },
+          {
+            "start_s": 180.0,
+            "end_s": 240.0,
+            "label": "hold_breath"
+          },
+          {
+            "start_s": 240.0,
+            "end_s": 300.0,
+            "label": "breathing"
+          },
+          {
+            "start_s": 300.0,
+            "end_s": 360.0,
+            "label": "hold_breath"
+          }
+        ],
+        "started_at": "2026-08-12T15:05:09.443+00:00",
+        "ended_at": "2026-08-12T15:11:09.459+00:00",
+        "raw_file": "data/raw/session_20260812_100509_hold_breath_off_hold_breath_off.csv",
+        "metadata_file": "data/metadata/session_20260812_100509_hold_breath_off_hold_breath_off.json",
+        "samples_collected": 33414,
+        "corrupt_lines": 0,
+        "sample_rate_estimated_hz": 92.813,
+        "stop_reason": "duration_complete"
+      },
+      "valid_rows": 33414,
+      "payload_lengths": {
+        "256": 33414
+      },
+      "data_start_s": 0.00136,
+      "data_end_s": 359.995246,
+      "breathing_activity_threshold": 1.3380626273636733
+    },
+    {
+      "source_file": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_101142_hold_breath_off_hold_breath_off.csv",
+      "metadata": {
+        "session_id": "session_20260812_101142_hold_breath_off",
+        "label": "hold_breath_off",
+        "duration_s": 360.013,
+        "requested_duration_s": 360.0,
+        "description": "Muñeco respirando y detenido por ciclos balanceados de 60 s.",
+        "tx_position": "",
+        "rx_position": "",
+        "distance_cm": "",
+        "height_cm": "",
+        "environment": "off",
+        "person_position": "between_tx_rx",
+        "notes": "",
+        "events": [
+          {
+            "start_s": 0.0,
+            "end_s": 60.0,
+            "label": "breathing"
+          },
+          {
+            "start_s": 60.0,
+            "end_s": 120.0,
+            "label": "hold_breath"
+          },
+          {
+            "start_s": 120.0,
+            "end_s": 180.0,
+            "label": "breathing"
+          },
+          {
+            "start_s": 180.0,
+            "end_s": 240.0,
+            "label": "hold_breath"
+          },
+          {
+            "start_s": 240.0,
+            "end_s": 300.0,
+            "label": "breathing"
+          },
+          {
+            "start_s": 300.0,
+            "end_s": 360.0,
+            "label": "hold_breath"
+          }
+        ],
+        "started_at": "2026-08-12T15:11:42.454+00:00",
+        "ended_at": "2026-08-12T15:17:42.465+00:00",
+        "raw_file": "data/raw/session_20260812_101142_hold_breath_off_hold_breath_off.csv",
+        "metadata_file": "data/metadata/session_20260812_101142_hold_breath_off_hold_breath_off.json",
+        "samples_collected": 35783,
+        "corrupt_lines": 0,
+        "sample_rate_estimated_hz": 99.394,
+        "stop_reason": "duration_complete"
+      },
+      "valid_rows": 35783,
+      "payload_lengths": {
+        "256": 35783
+      },
+      "data_start_s": 0.004634,
+      "data_end_s": 359.999702,
+      "breathing_activity_threshold": 1.3841433489263102
+    }
+  ],
+  "artifacts": {
+    "manifest": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/filtered/respiratory_20260812_q25/window_manifest.csv",
+    "features": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/filtered/respiratory_20260812_q25/X_features.npy",
+    "labels": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/filtered/respiratory_20260812_q25/y_labels.npy",
+    "groups": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/filtered/respiratory_20260812_q25/groups.npy"
+  },
+  "limitations": [
+    "Breathing inside a scheduled hold has no external ground-truth timestamp.",
+    "Ambiguous hold windows are excluded, never relabeled as breathing.",
+    "The confidence filter is suitable for conservative training curation, not an independent performance claim."
+  ]
+}

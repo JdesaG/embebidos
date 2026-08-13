@@ -1,15 +1,20 @@
-menu "CSI Sender Wi-Fi"
+menu "CSI Sensor and Actuator Node"
 
-config CSI_WIFI_SSID
-    string "Wi-Fi SSID"
-    default ""
-    help
-        SSID of the 2.4 GHz Wi-Fi network used by both ESP32 boards.
+config CSI_LIGHT_GPIO
+    int "WS2812 data GPIO"
+    range 0 39
+    default 25
 
-config CSI_WIFI_PASSWORD
-    string "Wi-Fi password"
-    default ""
+config CSI_LIGHT_LED_COUNT
+    int "Number of WS2812 LEDs"
+    range 1 64
+    default 16
+
+config CSI_LIGHT_MAX_BRIGHTNESS
+    int "Maximum LED brightness (0-255)"
+    range 1 255
+    default 76
     help
-        Password of the Wi-Fi network. Keep this value out of Git.
+        76 is about 30 percent and protects the 5 V power-bank budget.
 
 endmenu

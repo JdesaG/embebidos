@@ -64,12 +64,45 @@
             <span>Sonido</span>
             <strong id="soundValue">--</strong>
           </article>
-          <article>
-            <span>Ritmo</span>
-            <strong id="bpmValue">--</strong>
-          </article>
         </div>
         <p class="sensor-note" id="sensorNote">Aún no llegan lecturas desde los sensores.</p>
+      </section>
+
+      <section class="sensor-card controls-card" aria-labelledby="controlsTitle">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">CONTROL</p>
+            <h2 id="controlsTitle">Luz y consumo</h2>
+          </div>
+          <span class="sensor-badge" id="deviceBadge">Buscando gateway</span>
+        </div>
+        <div class="control-row">
+          <label class="switch-row">
+            <span>Luz</span>
+            <input id="lightToggle" type="checkbox">
+          </label>
+          <label>
+            Brillo
+            <input id="brightnessInput" type="range" min="0" max="76" value="38">
+          </label>
+          <label>
+            Color
+            <input id="colorInput" type="color" value="#ffb450">
+          </label>
+          <label>
+            Modo
+            <select id="energyMode">
+              <option value="monitoring">Monitoreo</option>
+              <option value="eco">Eco</option>
+              <option value="standby">Standby</option>
+            </select>
+          </label>
+        </div>
+        <div class="button-row">
+          <button id="applyDeviceBtn" type="button">Aplicar</button>
+          <button id="lightOffBtn" type="button" class="secondary">Apagar luz</button>
+        </div>
+        <p class="sensor-note" id="deviceNote">El gateway debe estar conectado para enviar comandos.</p>
       </section>
 
       <aside class="notice">

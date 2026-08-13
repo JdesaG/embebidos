@@ -1,21 +1,29 @@
 # CSI_SEND
 
-Firmware de la ESP32 emisora.
+Firmware de la ESP32 emisora que queda junto a los sensores y actuadores.
 
 ## Funcionamiento actual
 
-- Envia paquetes ESP-NOW a `100 Hz` para que `csi_recv` pueda extraer CSI.
-- Se conecta al mismo Wi-Fi que `csi_recv` antes de iniciar ESP-NOW.
-- Lee sensores conectados al emisor:
-  - `GPIO34`: TMP36.
-  - `GPIO35`: potenciómetro/BPM simulado.
-  - `GPIO27`: micrófono digital.
-- Controla buzzer/parlante en `GPIO26`.
-- Envia un paquete `SENSOR_DATA` por ESP-NOW cada segundo.
+- No guarda SSID ni contraseña. Busca al gateway `csi_recv` recorriendo los
+  canales de 2.4 GHz y se empareja automáticamente por ESP-NOW.
+- Envía paquetes para obtener CSI a 100 Hz en modo `monitoring`, 50 Hz en `eco`
+  y 1 Hz en `standby`.
+- Lee el TMP36 por ADC en GPIO34 y el módulo de sonido digital en GPIO27.
+- Controla un buzzer activo de 5 V en GPIO26 mediante la etapa de potencia de
+  la PCB. El GS1212S de 12 V debe sustituirse.
+- Controla hasta 16 LEDs WS2812B en GPIO25, con brillo limitado a 30 %.
+- Recibe desde la web los comandos de luz, buzzer y modo energético y devuelve
+  una confirmación de estado.
 
-La ESP emisora puede estar conectada a una bateria. No necesita estar conectada
-a la Mac; solo necesita las credenciales Wi-Fi configuradas en `idf.py
-menuconfig`.
+No existe ya un BPM simulado ni se requiere potenciómetro. El campo BPM se
+mantiene en cero solamente para conservar compatibilidad con los datos viejos.
 
-En `idf.py menuconfig`, menú `CSI Sender Wi-Fi`, configurar el SSID y la
-contraseña de la misma red usada por `csi_recv`.
+## Compilar y flashear
+
+```sh
+idf.py build
+idf.py -p PUERTO flash monitor
+```
+
+Los pines y cantidades de LED pueden cambiarse desde el menú `CSI Sender
+hardware` de `idf.py menuconfig`.

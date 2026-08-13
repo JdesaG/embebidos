@@ -1,0 +1,733 @@
+{
+  "generated_at": "2026-08-12T18:58:37+00:00",
+  "source_files": [
+    "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_131332_hold_breath_off_hold_breath_off.csv",
+    "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_131528_hold_breath_off_hold_breath_off.csv",
+    "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_131729_hold_breath_off_hold_breath_off.csv",
+    "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_131923_hold_breath_off_hold_breath_off.csv",
+    "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_132120_hold_breath_off_hold_breath_off.csv",
+    "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_132357_hold_breath_off_hold_breath_off.csv",
+    "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_132610_hold_breath_off_hold_breath_off.csv",
+    "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_133128_hold_breath_off_hold_breath_off.csv",
+    "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_133631_hold_breath_off_hold_breath_off.csv",
+    "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_133911_hold_breath_off_hold_breath_off.csv",
+    "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_134202_hold_breath_off_hold_breath_off.csv",
+    "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_134404_hold_breath_off_hold_breath_off.csv",
+    "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_134940_hold_breath_off_hold_breath_off.csv"
+  ],
+  "source_files_unchanged": true,
+  "parameters": {
+    "files": [
+      "csi_send/data/raw/session_20260812_131332_hold_breath_off_hold_breath_off.csv",
+      "csi_send/data/raw/session_20260812_131528_hold_breath_off_hold_breath_off.csv",
+      "csi_send/data/raw/session_20260812_131729_hold_breath_off_hold_breath_off.csv",
+      "csi_send/data/raw/session_20260812_131923_hold_breath_off_hold_breath_off.csv",
+      "csi_send/data/raw/session_20260812_132120_hold_breath_off_hold_breath_off.csv",
+      "csi_send/data/raw/session_20260812_132357_hold_breath_off_hold_breath_off.csv",
+      "csi_send/data/raw/session_20260812_132610_hold_breath_off_hold_breath_off.csv",
+      "csi_send/data/raw/session_20260812_133128_hold_breath_off_hold_breath_off.csv",
+      "csi_send/data/raw/session_20260812_133631_hold_breath_off_hold_breath_off.csv",
+      "csi_send/data/raw/session_20260812_133911_hold_breath_off_hold_breath_off.csv",
+      "csi_send/data/raw/session_20260812_134202_hold_breath_off_hold_breath_off.csv",
+      "csi_send/data/raw/session_20260812_134404_hold_breath_off_hold_breath_off.csv",
+      "csi_send/data/raw/session_20260812_134940_hold_breath_off_hold_breath_off.csv"
+    ],
+    "base_dir": "csi_send",
+    "output_dir": "data/filtered/manual_hold_20260812_w20",
+    "window_s": 20.0,
+    "stride_s": 5.0,
+    "target_hz": 50.0,
+    "stabilization_s": 10.0,
+    "transition_guard_s": 2.0,
+    "max_gap_s": 0.1,
+    "min_sample_ratio": 0.8,
+    "outlier_mad_z": 6.0,
+    "max_clip_fraction": 0.02,
+    "breathing_quantile": 0.25,
+    "respiratory_low_hz": 0.1,
+    "respiratory_high_hz": 0.5
+  },
+  "filters": [
+    "valid parseable CSI with a consistent even payload length per session",
+    "initial stabilization exclusion",
+    "100% label purity and transition guard",
+    "minimum sample coverage",
+    "maximum inter-sample time gap",
+    "per-subcarrier median/MAD spike winsorization",
+    "maximum clipped-amplitude fraction",
+    "valid active-subcarrier/PCA/respiratory feature extraction",
+    "conservative exclusion of hold windows whose activity matches session breathing baseline"
+  ],
+  "candidate_windows": 238,
+  "quality_counts": {
+    "accepted": 97,
+    "time_gap": 62,
+    "transition_guard": 29,
+    "mixed_or_unknown_label": 40,
+    "insufficient_samples": 10
+  },
+  "confidence_counts": {
+    "trusted_breathing": 43,
+    "ambiguous_breathing_evidence": 34,
+    "high_confidence_hold": 7,
+    "not_evaluated": 13
+  },
+  "final_windows": {
+    "total": 50,
+    "breathing": 43,
+    "hold_breath": 7
+  },
+  "session_summaries": [
+    {
+      "source_file": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_131332_hold_breath_off_hold_breath_off.csv",
+      "metadata": {
+        "session_id": "session_20260812_131332_hold_breath_off",
+        "label": "hold_breath_off",
+        "duration_s": 109.196,
+        "requested_duration_s": 180.0,
+        "manual_hold": true,
+        "manual_hold_start_s": 60.0,
+        "manual_hold_ended_s": 109.196,
+        "hold_duration_s": 49.196,
+        "valid_for_training": true,
+        "description": "Persona respirando 60 s; despues de la alarma mantiene una pausa voluntaria hasta pulsar el boton de finalizar.",
+        "tx_position": "",
+        "rx_position": "",
+        "distance_cm": "",
+        "height_cm": "",
+        "environment": "off",
+        "person_position": "between_tx_rx",
+        "notes": "",
+        "events": [
+          {
+            "start_s": 0.0,
+            "end_s": 60.0,
+            "label": "breathing"
+          },
+          {
+            "start_s": 60.0,
+            "end_s": 109.19645645888522,
+            "label": "hold_breath"
+          }
+        ],
+        "started_at": "2026-08-12T18:13:32.958+00:00",
+        "ended_at": "2026-08-12T18:15:22.154+00:00",
+        "raw_file": "data/raw/session_20260812_131332_hold_breath_off_hold_breath_off.csv",
+        "metadata_file": "data/metadata/session_20260812_131332_hold_breath_off_hold_breath_off.json",
+        "samples_collected": 8955,
+        "corrupt_lines": 0,
+        "sample_rate_estimated_hz": 82.008,
+        "stop_reason": "participant_ended_hold"
+      },
+      "valid_rows": 8955,
+      "payload_lengths": {
+        "256": 8955
+      },
+      "data_start_s": 0.014268,
+      "data_end_s": 109.194496,
+      "breathing_activity_threshold": 1.4335601549884112
+    },
+    {
+      "source_file": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_131528_hold_breath_off_hold_breath_off.csv",
+      "metadata": {
+        "session_id": "session_20260812_131528_hold_breath_off",
+        "label": "hold_breath_off",
+        "duration_s": 101.967,
+        "requested_duration_s": 180.0,
+        "manual_hold": true,
+        "manual_hold_start_s": 60.0,
+        "manual_hold_ended_s": 101.967,
+        "hold_duration_s": 41.967,
+        "valid_for_training": true,
+        "description": "Persona respirando 60 s; despues de la alarma mantiene una pausa voluntaria hasta pulsar el boton de finalizar.",
+        "tx_position": "",
+        "rx_position": "",
+        "distance_cm": "",
+        "height_cm": "",
+        "environment": "off",
+        "person_position": "between_tx_rx",
+        "notes": "",
+        "events": [
+          {
+            "start_s": 0.0,
+            "end_s": 60.0,
+            "label": "breathing"
+          },
+          {
+            "start_s": 60.0,
+            "end_s": 101.96690654242411,
+            "label": "hold_breath"
+          }
+        ],
+        "started_at": "2026-08-12T18:15:28.763+00:00",
+        "ended_at": "2026-08-12T18:17:10.730+00:00",
+        "raw_file": "data/raw/session_20260812_131528_hold_breath_off_hold_breath_off.csv",
+        "metadata_file": "data/metadata/session_20260812_131528_hold_breath_off_hold_breath_off.json",
+        "samples_collected": 10200,
+        "corrupt_lines": 0,
+        "sample_rate_estimated_hz": 100.032,
+        "stop_reason": "participant_ended_hold"
+      },
+      "valid_rows": 10200,
+      "payload_lengths": {
+        "256": 10200
+      },
+      "data_start_s": 0.008178,
+      "data_end_s": 101.962663,
+      "breathing_activity_threshold": 1.9637901060042193
+    },
+    {
+      "source_file": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_131729_hold_breath_off_hold_breath_off.csv",
+      "metadata": {
+        "session_id": "session_20260812_131729_hold_breath_off",
+        "label": "hold_breath_off",
+        "duration_s": 99.202,
+        "requested_duration_s": 180.0,
+        "manual_hold": true,
+        "manual_hold_start_s": 60.0,
+        "manual_hold_ended_s": 99.202,
+        "hold_duration_s": 39.202,
+        "valid_for_training": true,
+        "description": "Persona respirando 60 s; despues de la alarma mantiene una pausa voluntaria hasta pulsar el boton de finalizar.",
+        "tx_position": "",
+        "rx_position": "",
+        "distance_cm": "",
+        "height_cm": "",
+        "environment": "off",
+        "person_position": "between_tx_rx",
+        "notes": "",
+        "events": [
+          {
+            "start_s": 0.0,
+            "end_s": 60.0,
+            "label": "breathing"
+          },
+          {
+            "start_s": 60.0,
+            "end_s": 99.20182574959472,
+            "label": "hold_breath"
+          }
+        ],
+        "started_at": "2026-08-12T18:17:29.247+00:00",
+        "ended_at": "2026-08-12T18:19:08.540+00:00",
+        "raw_file": "data/raw/session_20260812_131729_hold_breath_off_hold_breath_off.csv",
+        "metadata_file": "data/metadata/session_20260812_131729_hold_breath_off_hold_breath_off.json",
+        "samples_collected": 9542,
+        "corrupt_lines": 0,
+        "sample_rate_estimated_hz": 96.188,
+        "stop_reason": "participant_ended_hold"
+      },
+      "valid_rows": 9542,
+      "payload_lengths": {
+        "256": 9542
+      },
+      "data_start_s": 0.019244,
+      "data_end_s": 99.191451,
+      "breathing_activity_threshold": 1.2005716890946223
+    },
+    {
+      "source_file": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_131923_hold_breath_off_hold_breath_off.csv",
+      "metadata": {
+        "session_id": "session_20260812_131923_hold_breath_off",
+        "label": "hold_breath_off",
+        "duration_s": 108.322,
+        "requested_duration_s": 180.0,
+        "manual_hold": true,
+        "manual_hold_start_s": 60.0,
+        "manual_hold_ended_s": 108.322,
+        "hold_duration_s": 48.322,
+        "valid_for_training": true,
+        "description": "Persona respirando 60 s; despues de la alarma mantiene una pausa voluntaria hasta pulsar el boton de finalizar.",
+        "tx_position": "",
+        "rx_position": "",
+        "distance_cm": "",
+        "height_cm": "",
+        "environment": "off",
+        "person_position": "between_tx_rx",
+        "notes": "",
+        "events": [
+          {
+            "start_s": 0.0,
+            "end_s": 60.0,
+            "label": "breathing"
+          },
+          {
+            "start_s": 60.0,
+            "end_s": 108.32244758261368,
+            "label": "hold_breath"
+          }
+        ],
+        "started_at": "2026-08-12T18:19:23.638+00:00",
+        "ended_at": "2026-08-12T18:21:11.961+00:00",
+        "raw_file": "data/raw/session_20260812_131923_hold_breath_off_hold_breath_off.csv",
+        "metadata_file": "data/metadata/session_20260812_131923_hold_breath_off_hold_breath_off.json",
+        "samples_collected": 4512,
+        "corrupt_lines": 0,
+        "sample_rate_estimated_hz": 41.653,
+        "stop_reason": "participant_ended_hold"
+      },
+      "valid_rows": 4512,
+      "payload_lengths": {
+        "256": 4512
+      },
+      "data_start_s": 11.406646,
+      "data_end_s": 108.31735,
+      "breathing_activity_threshold": null
+    },
+    {
+      "source_file": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_132120_hold_breath_off_hold_breath_off.csv",
+      "metadata": {
+        "session_id": "session_20260812_132120_hold_breath_off",
+        "label": "hold_breath_off",
+        "duration_s": 119.618,
+        "requested_duration_s": 180.0,
+        "manual_hold": true,
+        "manual_hold_start_s": 60.0,
+        "manual_hold_ended_s": 119.618,
+        "hold_duration_s": 59.618,
+        "valid_for_training": true,
+        "description": "Persona respirando 60 s; despues de la alarma mantiene una pausa voluntaria hasta pulsar el boton de finalizar.",
+        "tx_position": "",
+        "rx_position": "",
+        "distance_cm": "",
+        "height_cm": "",
+        "environment": "off",
+        "person_position": "between_tx_rx",
+        "notes": "",
+        "events": [
+          {
+            "start_s": 0.0,
+            "end_s": 60.0,
+            "label": "breathing"
+          },
+          {
+            "start_s": 60.0,
+            "end_s": 119.61818304099143,
+            "label": "hold_breath"
+          }
+        ],
+        "started_at": "2026-08-12T18:21:20.722+00:00",
+        "ended_at": "2026-08-12T18:23:20.341+00:00",
+        "raw_file": "data/raw/session_20260812_132120_hold_breath_off_hold_breath_off.csv",
+        "metadata_file": "data/metadata/session_20260812_132120_hold_breath_off_hold_breath_off.json",
+        "samples_collected": 12158,
+        "corrupt_lines": 0,
+        "sample_rate_estimated_hz": 101.64,
+        "stop_reason": "participant_ended_hold"
+      },
+      "valid_rows": 12158,
+      "payload_lengths": {
+        "256": 12158
+      },
+      "data_start_s": 0.010336,
+      "data_end_s": 119.61528,
+      "breathing_activity_threshold": 1.1804304376047332
+    },
+    {
+      "source_file": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_132357_hold_breath_off_hold_breath_off.csv",
+      "metadata": {
+        "session_id": "session_20260812_132357_hold_breath_off",
+        "label": "hold_breath_off",
+        "duration_s": 112.553,
+        "requested_duration_s": 180.0,
+        "manual_hold": true,
+        "manual_hold_start_s": 60.0,
+        "manual_hold_ended_s": 112.553,
+        "hold_duration_s": 52.553,
+        "valid_for_training": true,
+        "description": "Persona respirando 60 s; despues de la alarma mantiene una pausa voluntaria hasta pulsar el boton de finalizar.",
+        "tx_position": "",
+        "rx_position": "",
+        "distance_cm": "",
+        "height_cm": "",
+        "environment": "off",
+        "person_position": "between_tx_rx",
+        "notes": "",
+        "events": [
+          {
+            "start_s": 0.0,
+            "end_s": 60.0,
+            "label": "breathing"
+          },
+          {
+            "start_s": 60.0,
+            "end_s": 112.55319962464273,
+            "label": "hold_breath"
+          }
+        ],
+        "started_at": "2026-08-12T18:23:57.424+00:00",
+        "ended_at": "2026-08-12T18:25:49.977+00:00",
+        "raw_file": "data/raw/session_20260812_132357_hold_breath_off_hold_breath_off.csv",
+        "metadata_file": "data/metadata/session_20260812_132357_hold_breath_off_hold_breath_off.json",
+        "samples_collected": 11497,
+        "corrupt_lines": 0,
+        "sample_rate_estimated_hz": 102.147,
+        "stop_reason": "participant_ended_hold"
+      },
+      "valid_rows": 11497,
+      "payload_lengths": {
+        "256": 11497
+      },
+      "data_start_s": 0.008212,
+      "data_end_s": 112.550801,
+      "breathing_activity_threshold": 1.536709955110513
+    },
+    {
+      "source_file": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_132610_hold_breath_off_hold_breath_off.csv",
+      "metadata": {
+        "session_id": "session_20260812_132610_hold_breath_off",
+        "label": "hold_breath_off",
+        "duration_s": 108.043,
+        "requested_duration_s": 180.0,
+        "manual_hold": true,
+        "manual_hold_start_s": 60.0,
+        "manual_hold_ended_s": 108.043,
+        "hold_duration_s": 48.043,
+        "valid_for_training": true,
+        "description": "Persona respirando 60 s; despues de la alarma mantiene una pausa voluntaria hasta pulsar el boton de finalizar.",
+        "tx_position": "",
+        "rx_position": "",
+        "distance_cm": "",
+        "height_cm": "",
+        "environment": "off",
+        "person_position": "between_tx_rx",
+        "notes": "",
+        "events": [
+          {
+            "start_s": 0.0,
+            "end_s": 60.0,
+            "label": "breathing"
+          },
+          {
+            "start_s": 60.0,
+            "end_s": 108.04291587462649,
+            "label": "hold_breath"
+          }
+        ],
+        "started_at": "2026-08-12T18:26:10.513+00:00",
+        "ended_at": "2026-08-12T18:27:58.556+00:00",
+        "raw_file": "data/raw/session_20260812_132610_hold_breath_off_hold_breath_off.csv",
+        "metadata_file": "data/metadata/session_20260812_132610_hold_breath_off_hold_breath_off.json",
+        "samples_collected": 10935,
+        "corrupt_lines": 0,
+        "sample_rate_estimated_hz": 101.21,
+        "stop_reason": "participant_ended_hold"
+      },
+      "valid_rows": 10935,
+      "payload_lengths": {
+        "256": 10935
+      },
+      "data_start_s": 0.013707,
+      "data_end_s": 108.040038,
+      "breathing_activity_threshold": 1.5553823972322576
+    },
+    {
+      "source_file": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_133128_hold_breath_off_hold_breath_off.csv",
+      "metadata": {
+        "session_id": "session_20260812_133128_hold_breath_off",
+        "label": "hold_breath_off",
+        "duration_s": 133.912,
+        "requested_duration_s": 180.0,
+        "manual_hold": true,
+        "manual_hold_start_s": 60.0,
+        "manual_hold_ended_s": 133.912,
+        "hold_duration_s": 73.912,
+        "valid_for_training": true,
+        "description": "Persona respirando 60 s; despues de la alarma mantiene una pausa voluntaria hasta pulsar el boton de finalizar.",
+        "tx_position": "",
+        "rx_position": "",
+        "distance_cm": "",
+        "height_cm": "",
+        "environment": "off",
+        "person_position": "between_tx_rx",
+        "notes": "",
+        "events": [
+          {
+            "start_s": 0.0,
+            "end_s": 60.0,
+            "label": "breathing"
+          },
+          {
+            "start_s": 60.0,
+            "end_s": 133.91167129110545,
+            "label": "hold_breath"
+          }
+        ],
+        "started_at": "2026-08-12T18:31:28.330+00:00",
+        "ended_at": "2026-08-12T18:33:42.246+00:00",
+        "raw_file": "data/raw/session_20260812_133128_hold_breath_off_hold_breath_off.csv",
+        "metadata_file": "data/metadata/session_20260812_133128_hold_breath_off_hold_breath_off.json",
+        "samples_collected": 12333,
+        "corrupt_lines": 0,
+        "sample_rate_estimated_hz": 92.098,
+        "stop_reason": "participant_ended_hold"
+      },
+      "valid_rows": 12333,
+      "payload_lengths": {
+        "256": 12333
+      },
+      "data_start_s": 0.001381,
+      "data_end_s": 133.896243,
+      "breathing_activity_threshold": null
+    },
+    {
+      "source_file": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_133631_hold_breath_off_hold_breath_off.csv",
+      "metadata": {
+        "session_id": "session_20260812_133631_hold_breath_off",
+        "label": "hold_breath_off",
+        "duration_s": 155.23,
+        "requested_duration_s": 180.0,
+        "manual_hold": true,
+        "manual_hold_start_s": 60.0,
+        "manual_hold_ended_s": 155.23,
+        "hold_duration_s": 95.23,
+        "valid_for_training": true,
+        "description": "Persona respirando 60 s; despues de la alarma mantiene una pausa voluntaria hasta pulsar el boton de finalizar.",
+        "tx_position": "",
+        "rx_position": "",
+        "distance_cm": "",
+        "height_cm": "",
+        "environment": "off",
+        "person_position": "between_tx_rx",
+        "notes": "",
+        "events": [
+          {
+            "start_s": 0.0,
+            "end_s": 60.0,
+            "label": "breathing"
+          },
+          {
+            "start_s": 60.0,
+            "end_s": 155.2298375829123,
+            "label": "hold_breath"
+          }
+        ],
+        "started_at": "2026-08-12T18:36:31.854+00:00",
+        "ended_at": "2026-08-12T18:39:07.084+00:00",
+        "raw_file": "data/raw/session_20260812_133631_hold_breath_off_hold_breath_off.csv",
+        "metadata_file": "data/metadata/session_20260812_133631_hold_breath_off_hold_breath_off.json",
+        "samples_collected": 15733,
+        "corrupt_lines": 0,
+        "sample_rate_estimated_hz": 101.353,
+        "stop_reason": "participant_ended_hold"
+      },
+      "valid_rows": 15733,
+      "payload_lengths": {
+        "256": 15733
+      },
+      "data_start_s": 0.00319,
+      "data_end_s": 155.217754,
+      "breathing_activity_threshold": 1.5788063822934355
+    },
+    {
+      "source_file": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_133911_hold_breath_off_hold_breath_off.csv",
+      "metadata": {
+        "session_id": "session_20260812_133911_hold_breath_off",
+        "label": "hold_breath_off",
+        "duration_s": 127.4,
+        "requested_duration_s": 180.0,
+        "manual_hold": true,
+        "manual_hold_start_s": 60.0,
+        "manual_hold_ended_s": 127.4,
+        "hold_duration_s": 67.4,
+        "valid_for_training": true,
+        "description": "Persona respirando 60 s; despues de la alarma mantiene una pausa voluntaria hasta pulsar el boton de finalizar.",
+        "tx_position": "",
+        "rx_position": "",
+        "distance_cm": "",
+        "height_cm": "",
+        "environment": "off",
+        "person_position": "between_tx_rx",
+        "notes": "",
+        "events": [
+          {
+            "start_s": 0.0,
+            "end_s": 60.0,
+            "label": "breathing"
+          },
+          {
+            "start_s": 60.0,
+            "end_s": 127.39984895801172,
+            "label": "hold_breath"
+          }
+        ],
+        "started_at": "2026-08-12T18:39:11.452+00:00",
+        "ended_at": "2026-08-12T18:41:18.853+00:00",
+        "raw_file": "data/raw/session_20260812_133911_hold_breath_off_hold_breath_off.csv",
+        "metadata_file": "data/metadata/session_20260812_133911_hold_breath_off_hold_breath_off.json",
+        "samples_collected": 12895,
+        "corrupt_lines": 0,
+        "sample_rate_estimated_hz": 101.217,
+        "stop_reason": "participant_ended_hold"
+      },
+      "valid_rows": 12895,
+      "payload_lengths": {
+        "256": 12895
+      },
+      "data_start_s": 0.002464,
+      "data_end_s": 127.388005,
+      "breathing_activity_threshold": 1.1603453214380866
+    },
+    {
+      "source_file": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_134202_hold_breath_off_hold_breath_off.csv",
+      "metadata": {
+        "session_id": "session_20260812_134202_hold_breath_off",
+        "label": "hold_breath_off",
+        "duration_s": 106.361,
+        "requested_duration_s": 180.0,
+        "manual_hold": true,
+        "manual_hold_start_s": 60.0,
+        "manual_hold_ended_s": 106.361,
+        "hold_duration_s": 46.361,
+        "valid_for_training": true,
+        "description": "Persona respirando 60 s; despues de la alarma mantiene una pausa voluntaria hasta pulsar el boton de finalizar.",
+        "tx_position": "",
+        "rx_position": "",
+        "distance_cm": "",
+        "height_cm": "",
+        "environment": "off",
+        "person_position": "between_tx_rx",
+        "notes": "",
+        "events": [
+          {
+            "start_s": 0.0,
+            "end_s": 60.0,
+            "label": "breathing"
+          },
+          {
+            "start_s": 60.0,
+            "end_s": 106.36115437513217,
+            "label": "hold_breath"
+          }
+        ],
+        "started_at": "2026-08-12T18:42:02.474+00:00",
+        "ended_at": "2026-08-12T18:43:48.836+00:00",
+        "raw_file": "data/raw/session_20260812_134202_hold_breath_off_hold_breath_off.csv",
+        "metadata_file": "data/metadata/session_20260812_134202_hold_breath_off_hold_breath_off.json",
+        "samples_collected": 10870,
+        "corrupt_lines": 0,
+        "sample_rate_estimated_hz": 102.199,
+        "stop_reason": "participant_ended_hold"
+      },
+      "valid_rows": 10870,
+      "payload_lengths": {
+        "256": 10870
+      },
+      "data_start_s": 0.008696,
+      "data_end_s": 106.333549,
+      "breathing_activity_threshold": 1.239022141234164
+    },
+    {
+      "source_file": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_134404_hold_breath_off_hold_breath_off.csv",
+      "metadata": {
+        "session_id": "session_20260812_134404_hold_breath_off",
+        "label": "hold_breath_off",
+        "duration_s": 154.568,
+        "requested_duration_s": 180.0,
+        "manual_hold": true,
+        "manual_hold_start_s": 60.0,
+        "manual_hold_ended_s": 154.568,
+        "hold_duration_s": 94.568,
+        "valid_for_training": true,
+        "description": "Persona respirando 60 s; despues de la alarma mantiene una pausa voluntaria hasta pulsar el boton de finalizar.",
+        "tx_position": "",
+        "rx_position": "",
+        "distance_cm": "",
+        "height_cm": "",
+        "environment": "off",
+        "person_position": "between_tx_rx",
+        "notes": "",
+        "events": [
+          {
+            "start_s": 0.0,
+            "end_s": 60.0,
+            "label": "breathing"
+          },
+          {
+            "start_s": 60.0,
+            "end_s": 154.5682595418766,
+            "label": "hold_breath"
+          }
+        ],
+        "started_at": "2026-08-12T18:44:04.071+00:00",
+        "ended_at": "2026-08-12T18:46:38.640+00:00",
+        "raw_file": "data/raw/session_20260812_134404_hold_breath_off_hold_breath_off.csv",
+        "metadata_file": "data/metadata/session_20260812_134404_hold_breath_off_hold_breath_off.json",
+        "samples_collected": 13171,
+        "corrupt_lines": 0,
+        "sample_rate_estimated_hz": 85.212,
+        "stop_reason": "participant_ended_hold"
+      },
+      "valid_rows": 13171,
+      "payload_lengths": {
+        "256": 13171
+      },
+      "data_start_s": 0.016723,
+      "data_end_s": 133.644358,
+      "breathing_activity_threshold": null
+    },
+    {
+      "source_file": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/raw/session_20260812_134940_hold_breath_off_hold_breath_off.csv",
+      "metadata": {
+        "session_id": "session_20260812_134940_hold_breath_off",
+        "label": "hold_breath_off",
+        "duration_s": 140.0,
+        "requested_duration_s": 180.0,
+        "manual_hold": true,
+        "manual_hold_start_s": 60.0,
+        "manual_hold_ended_s": 140.0,
+        "hold_duration_s": 80.0,
+        "valid_for_training": true,
+        "description": "Persona respirando 60 s; despues de la alarma mantiene una pausa voluntaria hasta pulsar el boton de finalizar.",
+        "tx_position": "",
+        "rx_position": "",
+        "distance_cm": "",
+        "height_cm": "",
+        "environment": "off",
+        "person_position": "between_tx_rx",
+        "notes": "",
+        "events": [
+          {
+            "start_s": 0.0,
+            "end_s": 60.0,
+            "label": "breathing"
+          },
+          {
+            "start_s": 60.0,
+            "end_s": 139.99955987464637,
+            "label": "hold_breath"
+          }
+        ],
+        "started_at": "2026-08-12T18:49:40.068+00:00",
+        "ended_at": "2026-08-12T18:52:00.068+00:00",
+        "raw_file": "data/raw/session_20260812_134940_hold_breath_off_hold_breath_off.csv",
+        "metadata_file": "data/metadata/session_20260812_134940_hold_breath_off_hold_breath_off.json",
+        "samples_collected": 9719,
+        "corrupt_lines": 0,
+        "sample_rate_estimated_hz": 69.422,
+        "stop_reason": "participant_ended_hold"
+      },
+      "valid_rows": 9719,
+      "payload_lengths": {
+        "256": 9719
+      },
+      "data_start_s": 0.004929,
+      "data_end_s": 139.994987,
+      "breathing_activity_threshold": null
+    }
+  ],
+  "artifacts": {
+    "manifest": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/filtered/manual_hold_20260812_w20/window_manifest.csv",
+    "quality_features": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/filtered/manual_hold_20260812_w20/X_quality_features.npy",
+    "quality_labels": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/filtered/manual_hold_20260812_w20/y_quality_labels.npy",
+    "quality_groups": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/filtered/manual_hold_20260812_w20/quality_groups.npy",
+    "features": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/filtered/manual_hold_20260812_w20/X_features.npy",
+    "labels": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/filtered/manual_hold_20260812_w20/y_labels.npy",
+    "groups": "/Users/jandonyggarofalo/Documents/Desa/UNI/Semestre7/embebidos/esp-csi/examples/get-started/csi_send/data/filtered/manual_hold_20260812_w20/groups.npy"
+  },
+  "limitations": [
+    "Breathing inside a scheduled hold has no external ground-truth timestamp.",
+    "Ambiguous hold windows are excluded, never relabeled as breathing.",
+    "The confidence filter is suitable for conservative training curation, not an independent performance claim."
+  ]
+}

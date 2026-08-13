@@ -17,9 +17,7 @@
 #define PIN_MIC GPIO_NUM_27
 #define PIN_BUZZER GPIO_NUM_26
 #define ADC_TMP36 ADC_CHANNEL_6 /* GPIO34 en ESP32 */
-#define ADC_POT ADC_CHANNEL_7   /* GPIO35 en ESP32 */
 
-#define BPM_ALTO 100
 #define TEMP_MIN_BEBE_X10 100
 #define TEMP_MAX_BEBE_X10 300
 #define FAST_READ_INTERVAL_US 100000
@@ -43,6 +41,8 @@ typedef struct {
   uint8_t alert_flags;
   uint16_t buzzer_interval_ms;
   uint8_t buzzer_on;
+  uint8_t buzzer_override;
+  uint8_t buzzer_command_on;
   int64_t last_fast_read_us;
   int64_t last_temp_read_us;
   int64_t sound_alert_until_us;
@@ -101,20 +101,11 @@ static int16_t read_tmp36_x10(void) {
   return (int16_t)(voltage_mv - TMP36_OFFSET_MV + TMP36_TEMP_OFFSET_X10);
 }
 
-static uint16_t read_bpm_simulado(void) {
-  int raw = read_adc_raw(ADC_POT);
-  int bpm = 40 + ((raw * (180 - 40)) / 4095);
-  return (uint16_t)clamp_int(bpm, 40, 180);
-}
-
 static void update_alert_flags(void) {
   uint8_t flags = 0;
 
   if (esp_timer_get_time() < s_sensors.sound_alert_until_us) {
     flags |= SENSOR_ALERT_SOUND;
-  }
-  if (s_sensors.bpm >= BPM_ALTO) {
-    flags |= SENSOR_ALERT_BPM_HIGH;
   }
   if (s_sensors.temp_c_x10 > TEMP_MAX_BEBE_X10) {
     flags |= SENSOR_ALERT_TEMP_HIGH;
@@ -148,6 +139,14 @@ static void update_buzzer_priority(void) {
 }
 
 static void update_buzzer_output(int64_t now_us) {
+  if (s_sensors.buzzer_override) {
+    uint8_t requested = s_sensors.buzzer_command_on ? 1 : 0;
+    if (s_sensors.buzzer_on != requested) {
+      s_sensors.buzzer_on = requested;
+      gpio_set_level(PIN_BUZZER, requested);
+    }
+    return;
+  }
   if (s_sensors.buzzer_interval_ms == 0) {
     if (s_sensors.buzzer_on) {
       gpio_set_level(PIN_BUZZER, 0);
@@ -223,12 +222,10 @@ void sensors_init(void) {
   };
   ESP_ERROR_CHECK(
       adc_oneshot_config_channel(s_sensors.adc1, ADC_TMP36, &chan_cfg));
-  ESP_ERROR_CHECK(
-      adc_oneshot_config_channel(s_sensors.adc1, ADC_POT, &chan_cfg));
   init_adc_calibration();
 
   s_sensors.temp_c_x10 = read_tmp36_x10();
-  s_sensors.bpm = read_bpm_simulado();
+  s_sensors.bpm = 0; /* No hay sensor BPM instalado; se conserva el campo. */
   s_sensors.last_fast_read_us = esp_timer_get_time();
   s_sensors.last_temp_read_us = s_sensors.last_fast_read_us;
   s_sensors.last_buzzer_toggle_us = s_sensors.last_fast_read_us;
@@ -238,7 +235,7 @@ void sensors_init(void) {
 
   ESP_LOGI(
       TAG,
-      "Sensores listos: mic GPIO%d, buzzer GPIO%d, TMP36 GPIO34, BPM GPIO35",
+      "Sensores listos: sonido GPIO%d, buzzer activo 5 V GPIO%d, TMP36 GPIO34",
       PIN_MIC, PIN_BUZZER);
 }
 
@@ -246,7 +243,6 @@ void sensors_update(void) {
   int64_t now_us = esp_timer_get_time();
 
   if (now_us - s_sensors.last_fast_read_us >= FAST_READ_INTERVAL_US) {
-    s_sensors.bpm = read_bpm_simulado();
     s_sensors.sound_detected = gpio_get_level(PIN_MIC) == 0;
     if (s_sensors.sound_detected) {
       s_sensors.sound_alert_until_us = now_us + SOUND_ALERT_US;
@@ -287,4 +283,14 @@ bool sensors_get_payload_if_due(sensor_payload_t *payload) {
   payload->reserved = 0;
   payload->uptime_ms = (uint32_t)(now_us / 1000);
   return true;
+}
+
+void sensors_set_buzzer_override(bool enabled, bool on) {
+  s_sensors.buzzer_override = enabled ? 1 : 0;
+  s_sensors.buzzer_command_on = on ? 1 : 0;
+  update_buzzer_output(esp_timer_get_time());
+}
+
+bool sensors_buzzer_is_on(void) {
+  return s_sensors.buzzer_on != 0;
 }

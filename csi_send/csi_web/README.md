@@ -29,17 +29,14 @@ Si usas el Python de ESP-IDF:
 ```sh
 python3 \
   csi_web/server.py \
-  --model-path "models/apnea_model_july_2026.joblib" \
+  --model-path "models/apnea_model_raw_june_2026.joblib" \
   --http-port 8080 \
   --udp-port 5000
 ```
 
-El servidor escucha la dashboard HTTP en `8080` y los datos UDP en `5000`. La
-ESP debe apuntar a la IP Wi-Fi de esta Mac, nunca a `127.0.0.1`:
-
-```text
-Destino UDP: IP_DE_LA_MAC:5000
-```
+El servidor escucha la dashboard HTTP en `8080`, los datos en UDP `5000` y el
+descubrimiento del gateway en UDP `5001`. La IP de la Mac se descubre
+automáticamente y no se compila dentro de la ESP.
 
 Abrir:
 
@@ -47,22 +44,28 @@ Abrir:
 http://127.0.0.1:8080
 ```
 
-## Modelo de apnea (datos de julio)
+Desde un teléfono en la misma red se puede abrir la dirección `.local` que
+imprime el servidor al arrancar, por ejemplo
+`http://nombre-de-la-mac.local:8080/usuario`.
 
-El modelo disponible en `models/apnea_model_july_2026.joblib` fue entrenado
-solamente con las sesiones del 25 de julio de 2026. Usa las mismas ocho
-características y ventanas de 20 s que calcula el dashboard, por lo que puede
-cargarse con el comando anterior.
+## Modelo respiratorio predeterminado
+
+El modelo predeterminado es `models/apnea_model_raw_june_2026.joblib`. Fue
+entrenado con las sesiones respiratorias etiquetadas de `Downloads/raw`, usando
+las mismas ocho características y ventanas de 20 s que calcula el dashboard.
 
 Para regenerarlo cuando se incorporen nuevas sesiones de julio:
 
 ```sh
 /Users/jandonyggarofalo/.espressif/tools/python/v5.5.4/venv/bin/python3 \
-  csi_ml/train_apnea_model.py --month 202607
+  csi_ml/train_apnea_model.py --base-dir . \
+  --raw-dir /Users/jandonyggarofalo/Downloads/raw --month 202606 \
+  --output models/apnea_model_raw_june_2026.joblib \
+  --report data/reports/apnea_model_raw_june_2026.json
 ```
 
 El resultado de la evaluación por sesiones completas queda en
-`data/reports/apnea_model_july_2026.json`. Es un detector experimental de
+`data/reports/apnea_model_raw_june_2026.json`. Es un detector experimental de
 retención simulada, no un dispositivo de diagnóstico médico.
 
 ## Alertas por Telegram
@@ -97,7 +100,8 @@ TELEGRAM_ALERT_INTERVAL_S=1
 - Mapa 2D de referencia del cuarto con TX, RX y objetos.
 - Resultado del modelo respiratorio en vivo: respirando / posible apnea, RPM,
   probabilidad, confianza y calidad de señal.
-- Sensores del emisor: temperatura TMP36, BPM simulado, sonido/llanto y buzzer.
+- Sensores del emisor: temperatura TMP36, sonido/llanto y buzzer.
+- Control de LEDs WS2812B y modos energético `monitoring`, `eco` y `standby`.
 - Estado de alertas Telegram y cantidad de mensajes enviados.
 - Amplitud CSI por subportadora del último paquete.
 - Heatmap de amplitud CSI en el tiempo.
@@ -111,9 +115,9 @@ El botón `Calibrar` toma los últimos paquetes como baseline. Úsalo cuando el 
 Los sensores estan conectados al emisor:
 
 - `GPIO34`: TMP36 por ADC.
-- `GPIO35`: potenciómetro para BPM simulado por ADC.
 - `GPIO27`: micrófono digital, activo cuando la lectura es `LOW`.
-- `GPIO26`: buzzer/parlante como salida digital.
+- `GPIO26`: señal para la etapa de potencia de un buzzer activo de 5 V.
+- `GPIO25`: datos para los LEDs WS2812B.
 
 El emisor manda un paquete binario `sensor_payload_t` por ESP-NOW cada segundo.
 El receptor lo empaqueta en datagramas UDP binarios enviados a la Mac. El servidor
@@ -125,6 +129,7 @@ SENSOR_DATA,seq,temp_c_x10,bpm,sound_detected,alert_sound,alert_bpm_high,alert_t
 ```
 
 La temperatura viaja como `temp_c_x10`, por ejemplo `215` significa `21.5 C`.
+El campo BPM permanece en cero por compatibilidad y no representa una medición.
 Este flujo permite que solo el receptor este conectado a la Mac mientras el
 emisor trabaja con bateria.
 

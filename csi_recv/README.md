@@ -1,24 +1,40 @@
 # CSI_RECV
 
-Firmware de la ESP32 receptora.
+Firmware de la ESP32 gateway/receptora. Esta es la única ESP que el usuario
+configura.
 
 ## Funcionamiento actual
 
-- Escucha los paquetes ESP-NOW enviados por `csi_send`.
-- Extrae CSI desde el driver Wi-Fi y lo acumula en pequeños lotes binarios.
-- Reconoce paquetes de sensores con firma `SENS` y los incluye en esos lotes.
-- Se conecta como estación a una red Wi-Fi común y envía datagramas UDP a la Mac.
+- Si no puede entrar a una red guardada, crea el punto de acceso
+  `BabyCSI-XXXX` con clave `BabyCSI26`.
+- Sirve el portal en `http://192.168.4.1` para guardar una red principal y una
+  red de respaldo, ambas de 2.4 GHz.
+- Responde al emparejamiento del emisor para que ambas ESP usen el canal real
+  del router.
+- Extrae CSI y recibe sensores/estados por ESP-NOW.
+- Descubre automáticamente `server.py` por broadcast UDP; la IP del computador
+  ya no se compila ni se escribe en la ESP.
+- Reenvía al emisor los comandos de luz, buzzer y ahorro de energía de la web.
 
-Durante la demo esta es la única ESP32 que debe estar conectada por USB a la Mac
-para flashear o revisar logs. Los datos CSI y sensores viajan por Wi-Fi.
+Para borrar las redes, mantener presionado durante cinco segundos el botón de
+configuración conectado entre GPIO32 y GND mientras se enciende la placa.
 
-## Configuración
+La consola USB trabaja a 115200 baudios y se usa solo para diagnóstico. Cada
+10 segundos imprime una línea `DIAG` con el estado del servidor y contadores de
+emparejamiento, CSI, sensores y datagramas UDP. Los datos CSI continúan viajando
+por ESP-NOW y Wi-Fi; no se transportan por el cable USB.
 
-En `idf.py menuconfig`, menú `CSI Receiver Network`, configurar:
+## Compilar y flashear
 
-- `Wi-Fi SSID` y `Wi-Fi password`.
-- `UDP destination host`: IP de la Mac, por ejemplo `192.168.1.100`.
-- `UDP destination port`: `5000`, salvo que cambies el puerto del servidor.
+```sh
+idf.py build
+idf.py -p PUERTO flash monitor
+```
 
-La red debe ser de 2.4 GHz. Ambas ESP se conectan al mismo router y ESP-NOW usa
-automáticamente el canal actual de esa red; ya no se fija el canal 11.
+Para abrir únicamente el diagnóstico serial de una placa ya flasheada:
+
+```sh
+idf.py -p PUERTO monitor
+```
+
+El único ajuste de red compilado es el puerto UDP de ingesta, por defecto 5000.
